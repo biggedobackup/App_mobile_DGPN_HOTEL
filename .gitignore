@@ -1,0 +1,62 @@
+# Dependency directories
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+coverage/
+
+# IDE files
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Flutter/Build artifacts
+app.*.symbols
+app.*.map.json
+*.apk
+*.aab
+*.ipa
+*.app
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Local configuration files
+.env
+.env.*
+! .env.example
+
+# macOS/OSX
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Logs
+*.log
+.buildlog
+
+# Symbols
+*.dforsymbols
+*.symbols
+
+# Others
+.history
+.swp
+*.class
+*.pyc
+migrate_working_dir/
+
