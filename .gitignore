@@ -4,6 +4,7 @@
 .pub-cache/
 .pub/
 build/
+backup/
 coverage/
 
 # IDE files

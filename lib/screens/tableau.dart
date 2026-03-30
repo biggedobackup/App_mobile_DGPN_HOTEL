@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shimmer/shimmer.dart';
 import '../core/constants/app_colors.dart';
 import '../core/services/auth_service.dart';
 import '../core/services/sejour_service.dart';
 import '../core/services/sync_service.dart';
 import '../core/models/user_model.dart';
+import 'dart:async';
+
 
 // ─── Modèle d'une stat card ────────────────────────────────────────────────
 class _StatItem {
@@ -37,6 +40,8 @@ class TableauScreen extends StatefulWidget {
 class _TableauScreenState extends State<TableauScreen> {
   final _sejourService = SejourService();
   final _auth = AuthService();
+  StreamSubscription? _syncSubscription;
+
 
   Map<String, dynamic> _stats = {
     'nombre_clients_en_sejour': 0,
@@ -53,6 +58,68 @@ class _TableauScreenState extends State<TableauScreen> {
   void initState() {
     super.initState();
     _chargerDonnees();
+    _initSyncListener();
+  }
+
+  void _initSyncListener() {
+    _syncSubscription = SyncService().syncStream.listen((event) {
+      if (!mounted) return;
+
+      Color bgColor;
+      IconData icon;
+      
+      switch (event.status) {
+        case SyncStatus.syncing:
+          bgColor = const Color(0xFFD97706); // Amber
+          icon = Icons.sync_rounded;
+          break;
+        case SyncStatus.success:
+          bgColor = AppColors.emerald600;
+          icon = Icons.check_circle_outline_rounded;
+          break;
+        case SyncStatus.error:
+          bgColor = AppColors.error;
+          icon = Icons.error_outline_rounded;
+          break;
+        default:
+          return;
+      }
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  event.message,
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: bgColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: event.status == SyncStatus.syncing 
+              ? const Duration(days: 1) // Garder jusqu'à la fin
+              : const Duration(seconds: 4),
+        ),
+      );
+
+      // Si c'est fini (succès ou erreur), on rafraîchit les stats
+      if (event.status == SyncStatus.success || event.status == SyncStatus.error) {
+        _chargerDonnees();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _chargerDonnees() async {
@@ -150,7 +217,7 @@ class _TableauScreenState extends State<TableauScreen> {
       ),
       drawer: _buildDrawer(),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.emerald600))
+          ? _buildShimmerTableau()
           : RefreshIndicator(
               onRefresh: _refresh,
               color: AppColors.emerald600,
@@ -194,60 +261,71 @@ class _TableauScreenState extends State<TableauScreen> {
   Widget _buildSyncBadge() {
     return ValueListenableBuilder(
       valueListenable: Hive.box('sejours_offline').listenable(),
-      builder: (context, Box box, _) {
-        if (box.isEmpty) return const SizedBox.shrink();
+      builder: (context, Box sejoursBox, _) {
+        return ValueListenableBuilder(
+          valueListenable: Hive.box('sorties_offline').listenable(),
+          builder: (context, Box sortiesBox, _) {
+            final int total = sejoursBox.length + sortiesBox.length;
+            if (total == 0) return const SizedBox.shrink();
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 20),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFEF3C7),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFFDE68A)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.sync_problem_rounded, color: Color(0xFFD97706), size: 22),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'MODE HORS-LIGNE',
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        color: const Color(0xFFD97706),
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    Text(
-                      '${box.length} séjour${box.length > 1 ? 's' : ''} en attente.',
-                      style: GoogleFonts.inter(
-                        color: const Color(0xFF92400E),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
+            final String label = [
+              if (sejoursBox.isNotEmpty) '${sejoursBox.length} enregistrement${sejoursBox.length > 1 ? 's' : ''}',
+              if (sortiesBox.isNotEmpty) '${sortiesBox.length} sortie${sortiesBox.length > 1 ? 's' : ''}',
+            ].join(' · ');
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFFDE68A)),
               ),
-              ElevatedButton(
-                onPressed: () => SyncService().processQueue(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFD97706),
-                  minimumSize: const Size(80, 32),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: Text(
-                  'SYNCHRO',
-                  style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900),
-                ),
+              child: Row(
+                children: [
+                  const Icon(Icons.sync_problem_rounded, color: Color(0xFFD97706), size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'MODE HORS-LIGNE',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFFD97706),
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        Text(
+                          '$total opération${total > 1 ? 's' : ''} en attente ($label)',
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF92400E),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => SyncService().processAllQueues(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD97706),
+                      minimumSize: const Size(80, 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Text(
+                      'SYNCHRO',
+                      style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -810,6 +888,80 @@ class _TableauScreenState extends State<TableauScreen> {
       },
       selected: selected,
       selectedTileColor: AppColors.emerald50.withValues(alpha: 0.5),
+    );
+  }
+
+  Widget _buildShimmerTableau() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Shimmer.fromColors(
+        baseColor: Colors.grey[200]!,
+        highlightColor: Colors.grey[50]!,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 100,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              width: 100,
+              height: 12,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(height: 12),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 6,
+                childAspectRatio: 2.8,
+              ),
+              itemCount: 4,
+              itemBuilder: (_, __) => Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              height: 180,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              width: 150,
+              height: 12,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              height: 200,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

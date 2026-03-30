@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import '../constants/api_config.dart';
 import '../models/user_model.dart';
+import 'cache_warmup_service.dart';
 
 class AuthService {
   static const String _baseUrl = ApiConfig.baseUrl;
@@ -64,6 +65,9 @@ class AuthService {
     await prefs.remove('user_hotel_id');
     await prefs.remove('user_nom');
     await prefs.remove('user_email');
+    
+    // Effacer le cache lors de la déconnexion pour la sécurité et l'intégrité des données
+    await CacheWarmupService().clearAllCache();
   }
 
   Future<String?> getToken() async {

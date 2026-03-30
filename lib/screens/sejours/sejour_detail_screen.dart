@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:photo_view/photo_view.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/sejour_model.dart';
 import '../../core/services/sejour_service.dart';
 import '../../core/widgets/custom_button.dart';
 import '../../core/widgets/custom_text_field.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/utils/ui_utils.dart';
+
 
 class SejourDetailScreen extends StatefulWidget {
   final int sejourId;
@@ -52,10 +56,29 @@ class _SejourDetailScreenState extends State<SejourDetailScreen> {
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.emerald600))
+          ? _buildShimmerDetail()
           : _sejour == null
               ? _buildError()
               : _buildContent(),
+    );
+  }
+
+  Widget _buildShimmerDetail() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Shimmer.fromColors(
+        baseColor: Colors.grey[200]!,
+        highlightColor: Colors.grey[50]!,
+        child: Column(
+          children: [
+            Container(height: 200, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24))),
+            const SizedBox(height: 24),
+            Container(height: 150, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24))),
+            const SizedBox(height: 24),
+            Container(height: 150, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24))),
+          ],
+        ),
+      ),
     );
   }
 
@@ -227,31 +250,71 @@ class _SejourDetailScreenState extends State<SejourDetailScreen> {
   }
 
   Widget _buildImageThumbnail(String label, String url) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 9,
-            fontWeight: FontWeight.w900,
-            color: AppColors.slate400,
-          ),
-        ),
-        const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: CachedNetworkImage(
-              imageUrl: url,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(color: AppColors.slate50),
-              errorWidget: (context, url, error) => const Icon(Icons.error),
+    return GestureDetector(
+      onTap: () => _showFullScreenImage(url, label),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              color: AppColors.slate400,
             ),
           ),
+          const SizedBox(height: 4),
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(color: AppColors.slate50),
+                    errorWidget: (context, url, error) => const Icon(Icons.error),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.zoom_in, color: Colors.white, size: 16),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFullScreenImage(String url, String title) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            title: Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold)),
+          ),
+          body: PhotoView(
+            imageProvider: CachedNetworkImageProvider(url),
+            minScale: PhotoViewComputedScale.contained,
+            maxScale: PhotoViewComputedScale.covered * 2.0,
+          ),
         ),
-      ],
+      ),
     );
   }
 
@@ -401,8 +464,16 @@ class _SejourDetailScreenState extends State<SejourDetailScreen> {
                     setModalState(() => saving = false);
                     if (success) {
                       Navigator.pop(context);
-                      if (mounted) _charger();
+                      if (mounted) {
+                        _charger();
+                        UIUtils.showSuccessBanner(context, 'Sortie enregistrée');
+                      }
+                    } else {
+                      if (context.mounted) {
+                        UIUtils.showErrorBanner(context, 'Échec de l\'enregistrement de la sortie');
+                      }
                     }
+
                   },
                 ),
               ],

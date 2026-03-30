@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/sejour_service.dart';
 import '../../core/models/sejour_model.dart';
 import '../../core/widgets/custom_text_field.dart';
 import '../../core/widgets/custom_button.dart';
+import '../../core/utils/debouncer.dart';
+import '../../core/utils/ui_utils.dart';
+
 
 class SejoursActifsScreen extends StatefulWidget {
   const SejoursActifsScreen({super.key});
@@ -17,38 +21,89 @@ class SejoursActifsScreen extends StatefulWidget {
 class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
   final _sejourService = SejourService();
   final _searchCtrl = TextEditingController();
+  final _debouncer = Debouncer(milliseconds: 500);
+  final _scrollController = ScrollController();
+  
   DateTime? _dateDebut;
   DateTime? _dateFin;
 
   List<SejourModel> _sejours = [];
   bool _loading = true;
+  bool _loadingMore = false;
+  int _currentPage = 1;
+  int _totalCount = 0;
 
   @override
   void initState() {
     super.initState();
     _charger();
-    _searchCtrl.addListener(() {
+    _searchCtrl.addListener(_onSearchChanged);
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onSearchChanged() {
+    _debouncer.run(() {
       _charger();
     });
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (!_loading && !_loadingMore && _sejours.length < _totalCount) {
+        _chargerPlus();
+      }
+    }
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
   Future<void> _charger() async {
-    setState(() => _loading = true);
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _currentPage = 1;
+      _sejours = [];
+    });
+    
     final data = await _sejourService.getSejoursActifs(
+      page: _currentPage,
       search: _searchCtrl.text,
       dateDebut: _dateDebut?.toIso8601String().split('T')[0],
       dateFin: _dateFin?.toIso8601String().split('T')[0],
     );
+    
     if (mounted) {
       setState(() {
-        _sejours = data['results'] as List<SejourModel>;
+        _sejours = List<SejourModel>.from(data['results'] ?? []);
+
+        _totalCount = data['count'] as int;
         _loading = false;
+      });
+    }
+  }
+
+  Future<void> _chargerPlus() async {
+    if (_loadingMore) return;
+    setState(() => _loadingMore = true);
+    
+    _currentPage++;
+    final data = await _sejourService.getSejoursActifs(
+      page: _currentPage,
+      search: _searchCtrl.text,
+      dateDebut: _dateDebut?.toIso8601String().split('T')[0],
+      dateFin: _dateFin?.toIso8601String().split('T')[0],
+    );
+
+    if (mounted) {
+      setState(() {
+        _sejours.addAll(List<SejourModel>.from(data['results'] ?? []));
+
+        _loadingMore = false;
       });
     }
   }
@@ -161,14 +216,14 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
                           Navigator.pop(context);
                           if (mounted) _charger();
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Sortie enregistrée'),
-                                backgroundColor: AppColors.emerald600,
-                              ),
-                            );
+                            UIUtils.showSuccessBanner(context, 'Sortie enregistrée');
+                          }
+                        } else {
+                          if (context.mounted) {
+                            UIUtils.showErrorBanner(context, 'Échec de l\'enregistrement de la sortie');
                           }
                         }
+
                       },
                     ),
                     const SizedBox(height: 12),
@@ -201,17 +256,38 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
           _buildFilters(),
           _buildActiveFilterChips(),
           Expanded(
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.emerald600,
-                    ),
-                  )
-                : _sejours.isEmpty
-                    ? _buildEmptyState()
-                    : _buildList(),
+            child: RefreshIndicator(
+              onRefresh: _charger,
+              color: AppColors.emerald600,
+              child: _loading
+                  ? _buildShimmerList()
+                  : _sejours.isEmpty
+                      ? _buildEmptyState()
+                      : _buildList(),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildShimmerList() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(20),
+      itemCount: 6,
+      itemBuilder: (_, __) => Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Shimmer.fromColors(
+          baseColor: Colors.grey[200]!,
+          highlightColor: Colors.grey[50]!,
+          child: Container(
+            height: 140,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -344,23 +420,38 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
   }
 
   Widget _buildList() {
-    return RefreshIndicator(
-      onRefresh: _charger,
-      color: AppColors.emerald600,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(20),
-        itemCount: _sejours.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 16),
-        itemBuilder: (context, index) => _buildSejourCard(_sejours[index]),
-      ),
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(20),
+      itemCount: _sejours.length + (_loadingMore ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index < _sejours.length) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _buildSejourCard(_sejours[index]),
+          );
+        } else {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.emerald600),
+            ),
+          );
+        }
+      },
     );
   }
 
   Widget _buildSejourCard(SejourModel s) {
     return InkWell(
-      onTap: () {
-        context.push('/enregistrement/${s.id}/detail').then((_) => _charger());
-      },
+      onTap: s.isOffline
+          ? null
+          : () {
+              context
+                  .push('/enregistrement/${s.id}/detail')
+                  .then((_) => _charger());
+            },
+
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
@@ -421,18 +512,20 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.emerald50,
+                      color: s.isOffline ? const Color(0xFFFEF3C7) : AppColors.emerald50,
                       borderRadius: BorderRadius.circular(8),
+                      border: s.isOffline ? Border.all(color: const Color(0xFFFDE68A)) : null,
                     ),
                     child: Text(
-                      'ACTIF',
+                      s.isOffline ? 'HORS-LIGNE' : 'ACTIF',
                       style: GoogleFonts.inter(
                         fontWeight: FontWeight.w900,
                         fontSize: 8,
-                        color: AppColors.emerald700,
+                        color: s.isOffline ? const Color(0xFFD97706) : AppColors.emerald700,
                       ),
                     ),
                   ),
+
                 ],
               ),
               const Divider(height: 24),
@@ -452,7 +545,7 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
-                    onPressed: () => context.push('/enregistrement/${s.id}/modifier').then((_) => _charger()),
+                    onPressed: s.isOffline ? null : () => context.push('/enregistrement/${s.id}/modifier').then((_) => _charger()),
                     icon: const Icon(Icons.edit, size: 12),
                     label: const Text('MODIFIER'),
                     style: ElevatedButton.styleFrom(
@@ -470,11 +563,11 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
-                    onPressed: () => _showSortieModal(s),
+                    onPressed: s.isOffline ? null : () => _showSortieModal(s),
                     icon: const Icon(Icons.logout, size: 12),
                     label: const Text('SORTIE'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.error,
+                      backgroundColor: s.isOffline ? AppColors.slate200 : AppColors.error,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       minimumSize: const Size(64, 32),
@@ -488,6 +581,7 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
                       ),
                     ),
                   ),
+
                 ],
               ),
             ],

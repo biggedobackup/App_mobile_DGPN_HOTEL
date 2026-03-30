@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../constants/api_config.dart';
 import '../models/user_model.dart';
 
@@ -19,6 +20,8 @@ class UtilisateurService {
   }
 
   Future<List<UserModel>> getUtilisateurs({String? search, String? role, String? statut}) async {
+    final cacheBox = Hive.box('cache');
+    const cacheKey = 'utilisateurs_list';
     try {
       final token = await _getToken();
       final queryParams = <String, String>{};
@@ -35,12 +38,13 @@ class UtilisateurService {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-      );
+      ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        await cacheBox.put(cacheKey, decoded);
+        
         List<dynamic> items;
-
         if (decoded is Map && decoded.containsKey('results')) {
           items = decoded['results'] as List<dynamic>;
         } else if (decoded is List) {
@@ -48,22 +52,16 @@ class UtilisateurService {
         } else {
           return [];
         }
-
-        try {
-          return items.map((u) => UserModel.fromJson(u as Map<String, dynamic>)).toList();
-        } catch (e) {
-          // ignore: avoid_print
-          print('[UtilisateurService] Erreur mapping UserModel: $e');
-          return [];
-        }
+        return items.map((u) => UserModel.fromJson(u as Map<String, dynamic>)).toList();
       }
-      debugPrintResponse(response.statusCode, response.body);
-      return [];
-    } catch (e) {
-      // ignore: avoid_print
-      print('[UtilisateurService] getUtilisateurs catch: $e');
-      return [];
+    } catch (_) {}
+
+    final cached = cacheBox.get(cacheKey);
+    if (cached != null) {
+      final List<dynamic> items = (cached is Map) ? (cached['results'] ?? []) : cached;
+      return items.map((u) => UserModel.fromJson(Map<String, dynamic>.from(u))).toList();
     }
+    return [];
   }
 
   Future<Map<String, dynamic>> createUtilisateurWithDetail(Map<String, dynamic> data) async {
@@ -148,6 +146,8 @@ class UtilisateurService {
   }
 
   Future<UserModel?> getUtilisateurById(int id) async {
+    final cacheBox = Hive.box('cache');
+    final cacheKey = 'utilisateur_detail_$id';
     try {
       final token = await _getToken();
       final response = await http.get(
@@ -156,17 +156,22 @@ class UtilisateurService {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-      );
+      ).timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
-        return UserModel.fromJson(jsonDecode(utf8.decode(response.bodyBytes)));
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        await cacheBox.put(cacheKey, data);
+        return UserModel.fromJson(data);
       }
-      return null;
-    } catch (_) {
-      return null;
-    }
+    } catch (_) {}
+
+    // Fallback hors-ligne
+    final cached = cacheBox.get(cacheKey);
+    return cached != null ? UserModel.fromJson(Map<String, dynamic>.from(cached)) : null;
   }
 
   Future<UserModel?> getProfil() async {
+    final cacheBox = Hive.box('cache');
+    const cacheKey = 'user_profil';
     try {
       final token = await _getToken();
       final response = await http.get(
@@ -175,19 +180,17 @@ class UtilisateurService {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json'
         },
-      );
+      ).timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
+        await cacheBox.put(cacheKey, data);
         return UserModel.fromJson(data);
       }
-      debugPrintResponse(response.statusCode, response.body);
-      return null;
-    } catch (e) {
-      // ignore: avoid_print
-      print('[UtilisateurService] getProfil catch: $e');
-      return null;
-    }
+    } catch (_) {}
+
+    final cached = cacheBox.get(cacheKey);
+    return cached != null ? UserModel.fromJson(Map<String, dynamic>.from(cached)) : null;
   }
 
   Future<bool> updateProfil(Map<String, dynamic> data) async {

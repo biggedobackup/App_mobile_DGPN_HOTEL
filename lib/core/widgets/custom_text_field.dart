@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
 import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 
@@ -14,6 +16,10 @@ class CustomTextField extends StatelessWidget {
   final bool readOnly;
   final VoidCallback? onTap;
   final int maxLines;
+  final Function(String)? onChanged;
+  final List<String>? autofillHints;
+  final List<TextInputFormatter>? inputFormatters;
+
 
   const CustomTextField({
     super.key,
@@ -28,7 +34,11 @@ class CustomTextField extends StatelessWidget {
     this.readOnly = false,
     this.onTap,
     this.maxLines = 1,
+    this.onChanged,
+    this.autofillHints,
+    this.inputFormatters,
   });
+
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +61,11 @@ class CustomTextField extends StatelessWidget {
           obscureText: obscureText,
           readOnly: readOnly,
           onTap: onTap,
+          onChanged: onChanged,
+          autofillHints: autofillHints,
           validator: validator,
+          inputFormatters: inputFormatters,
+
           maxLines: maxLines,
           style: GoogleFonts.inter(
             fontWeight: FontWeight.bold,

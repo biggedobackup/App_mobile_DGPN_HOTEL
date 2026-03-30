@@ -1,5 +1,5 @@
 class ApiConfig {
-  static const String baseUrl = 'http://10.10.16.83:8001/api';
+  static const String baseUrl = 'http://10.10.25.192:8001/api';
 
   // Auth
   static const String loginUrl = '/connexion/';
@@ -11,7 +11,11 @@ class ApiConfig {
   static const String sejoursTerminesUrl = '/sejours/termines/';
   static const String historiqueSejoursUrl = '/sejours/tous/';
   static const String enregistrementSejourUrl = '/sejours/enregistrer/';
+  static const String clientHistoriqueUrl = '/sejours/historique-clients/';
   static const String nationalitesUrl = '/sejours/nationalites/';
+  // Synchro en masse (offline → serveur)
+  static const String sejoursEnMasseUrl = '/sejours/tous/sejourenmasse/';
+  static const String sejoursUploadImagesUrl = '/sejours/tous/upload-images/';
 
   // Utilisateurs
   static const String utilisateursUrl = '/utilisateurs/';

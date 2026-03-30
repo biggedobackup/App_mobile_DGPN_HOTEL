@@ -61,9 +61,14 @@ class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScr
         backgroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.slate800, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Text('HISTORIQUE VOYAGEUR',
             style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 2, color: AppColors.slate800)),
       ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -99,9 +104,13 @@ class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScr
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: Center(
-                  child: Text(_historique!.nomClient[0] + _historique!.prenomClient[0],
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 24, color: AppColors.slate400)),
+                  child: Text(
+                    ((_historique!.nomClient.isNotEmpty ? _historique!.nomClient[0] : '') + 
+                     (_historique!.prenomClient.isNotEmpty ? _historique!.prenomClient[0] : '')).toUpperCase(),
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 24, color: AppColors.slate400),
+                  ),
                 ),
+
               ),
               const SizedBox(width: 20),
               Expanded(
@@ -159,7 +168,12 @@ class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScr
       children: [
         _statCard('SÉJOURS', _historique!.nombreSejours.toString(), Icons.history),
         const SizedBox(width: 16),
-        _statCard('DERNIER PASSAGE', _historique!.dernierSejourDate.split('T')[0], Icons.calendar_today),
+        _statCard('DERNIER PASSAGE', 
+          (_historique!.dernierSejourDate.isNotEmpty && _historique!.dernierSejourDate.contains('T')) 
+            ? _historique!.dernierSejourDate.split('T')[0] 
+            : (_historique!.dernierSejourDate.isNotEmpty ? _historique!.dernierSejourDate : 'N/A'), 
+          Icons.calendar_today),
+
       ],
     );
   }

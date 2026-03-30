@@ -1,20 +1,75 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'routes/app_router.dart';
 import 'core/constants/app_colors.dart';
 
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:workmanager/workmanager.dart';
 import 'core/services/sync_service.dart';
+import 'core/services/cache_warmup_service.dart';
+
+@pragma('vm:entry-point')
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    // Initialisation minimale pour les tâches d'arrière-plan
+    await Hive.initFlutter();
+    await Hive.openBox('sejours_offline');
+    await Hive.openBox('sorties_offline');
+    await Hive.openBox('cache');
+
+    // 1. Synchroniser les données locales vers le serveur
+    await SyncService().processAllQueues();
+
+    // 2. Préchauffage proactif du cache
+    await CacheWarmupService().warmUp();
+
+    return Future.value(true);
+  });
+}
+
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  HttpOverrides.global = MyHttpOverrides();
+
   
   // Initialisation du stockage local et synchro
   await Hive.initFlutter();
   await Hive.openBox('sejours_offline');
+  await Hive.openBox('sorties_offline');
+  await Hive.openBox('cache');
   SyncService().init();
+
+  // Configuration de Workmanager pour la synchronisation en arrière-plan
+  await Workmanager().initialize(
+    callbackDispatcher,
+    isInDebugMode: false,
+  );
   
+  // Tâche périodique (toutes les 15 min minimum par défaut sur Android)
+  await Workmanager().registerPeriodicTask(
+    "dgpn-sync-task",
+    "syncAndWarmup",
+    frequency: const Duration(minutes: 15),
+    constraints: Constraints(
+      networkType: NetworkType.connected,
+    ),
+  );
+
+  // Préchauffage immédiat au démarrage (ne bloque pas l'UI)
+  CacheWarmupService().warmUp();
+
   await initializeDateFormatting('fr_FR', null);
   runApp(const DgpnHotelApp());
 }
@@ -76,6 +131,65 @@ class DgpnHotelApp extends StatelessWidget {
         ),
       ),
       routerConfig: appRouter,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            child!,
+            const GlobalOfflineBanner(),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class GlobalOfflineBanner extends StatelessWidget {
+  const GlobalOfflineBanner({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<ConnectivityResult>>(
+      stream: Connectivity().onConnectivityChanged,
+      builder: (context, snapshot) {
+        final results = snapshot.data ?? [];
+        final isOffline = results.contains(ConnectivityResult.none);
+        
+        if (!isOffline) return const SizedBox.shrink();
+
+        return Positioned(
+          top: MediaQuery.of(context).padding.top,
+          left: 0,
+          right: 0,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              color: const Color(0xFFD97706), // Amber-600
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              child: SafeArea(
+                bottom: false,
+                top: false,
+                child: Row(
+                  children: [
+                    const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'MODE HORS-LIGNE — Vos données sont sauvegardées localement.',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

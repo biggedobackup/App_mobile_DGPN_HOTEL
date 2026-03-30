@@ -26,9 +26,11 @@ class SejourModel {
   final String? agentSortieNom;
   final String? dateModification;
   final String statut;
+  final bool isOffline;
 
   SejourModel({
     this.id,
+
     required this.nomClient,
     required this.prenomClient,
     required this.dateNaissance,
@@ -53,7 +55,9 @@ class SejourModel {
     this.agentSortieNom,
     this.dateModification,
     required this.statut,
+    this.isOffline = false,
   });
+
 
   factory SejourModel.fromJson(Map<String, dynamic> json) {
     return SejourModel(
@@ -82,8 +86,36 @@ class SejourModel {
       agentSortieNom: json['agent_sortie_nom'],
       dateModification: json['date_modification'],
       statut: json['statut'] ?? 'EN_SEJOUR',
+      isOffline: false,
     );
   }
+
+  factory SejourModel.fromOffline(Map<String, dynamic> offlineData) {
+    final fields = Map<String, String>.from(offlineData['fields'] ?? {});
+    return SejourModel(
+      id: null,
+      nomClient: fields['nom_client'] ?? '',
+      prenomClient: fields['prenom_client'] ?? '',
+      dateNaissance: fields['date_naissance'] ?? '',
+      lieuNaissance: fields['lieu_naissance'] ?? '',
+      lieuResidence: fields['lieu_residence'] ?? '',
+      profession: fields['profession'] ?? '',
+      nationalite: fields['nationalite'] ?? '',
+      typeDocument: fields['type_document'] ?? '',
+      numeroDocument: fields['numero_document'] ?? '',
+      dateEntree: offlineData['timestamp'] ?? DateTime.now().toIso8601String(),
+      motifSejour: fields['motif_sejour'] ?? '',
+      numeroChambre: fields['numero_chambre'] ?? '',
+      hotel: 0,
+      contactTelephone: fields['contact_telephone'] ?? '',
+      statut: 'HORS-LIGNE',
+      photoClient: offlineData['photoClient'],
+      documentRecto: offlineData['documentRecto'],
+      documentVerso: offlineData['documentVerso'],
+      isOffline: true,
+    );
+  }
+
 
   String get clientFullName => '$prenomClient $nomClient'.trim();
 

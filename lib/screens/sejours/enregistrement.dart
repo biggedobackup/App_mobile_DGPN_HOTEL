@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,12 +9,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+
 import '../../core/constants/api_config.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/widgets/custom_text_field.dart';
 import '../../core/widgets/custom_button.dart';
 import '../../core/widgets/section_header.dart';
 import '../../core/services/sejour_service.dart';
+import '../../core/utils/ui_utils.dart';
+
 
 class EnregistrementScreen extends StatefulWidget {
   final String? sejourId;
@@ -153,7 +157,11 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
     );
 
     if (source == null) return;
-    final picked = await _picker.pickImage(source: source, imageQuality: 80);
+    final picked = await _picker.pickImage(
+      source: source,
+      maxWidth: 1024,
+      imageQuality: 70,
+    );
     if (picked != null) {
       setState(() {
         if (type == 'recto') _docRecto = File(picked.path);
@@ -277,10 +285,16 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   Future<void> _soumettre() async {
     if (!_formKey.currentState!.validate()) return;
     
-    // Si on est en création, le document recto est obligatoire
-    if (widget.sejourId == null && _docRecto == null) {
-      _showError('Pièce d\'identité (Recto) requise');
-      return;
+    // Validation des documents si création
+    if (widget.sejourId == null) {
+      if (_docRecto == null) {
+        _showError('Document Recto obligatoire');
+        return;
+      }
+      if (_docVerso == null) {
+        _showError('Document Verso obligatoire');
+        return;
+      }
     }
 
     setState(() => _loading = true);
@@ -299,11 +313,11 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
       'numero_chambre': _chambreCtrl.text.trim(),
       'motif_sejour': _motifSejour,
       'hotel': _hotelId,
-      // On conserve la date d'entrée saisie ou on met la date actuelle
       'date_entree': _dateEntreeCtrl.text.isNotEmpty 
           ? _dateEntreeCtrl.text.replaceAll(' ', 'T') 
           : DateTime.now().toIso8601String(),
     };
+
 
     bool success;
     if (widget.sejourId != null) {
@@ -326,28 +340,35 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
     if (mounted) {
       setState(() => _loading = false);
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(widget.sejourId != null ? 'Modification réussie !' : 'Enregistrement réussi !'),
-            backgroundColor: AppColors.emerald600,
-          ),
+        final List<ConnectivityResult> connectivityResult =
+            await Connectivity().checkConnectivity();
+        final bool isOffline =
+            connectivityResult.contains(ConnectivityResult.none);
+
+        UIUtils.showSuccessBanner(
+          context,
+          widget.sejourId != null ? 'Séjour mis à jour' : 'Client enregistré',
+          isOffline: isOffline,
         );
+
+
         if (widget.sejourId != null) {
           Navigator.pop(context, true);
         } else {
           context.go('/tableau');
         }
-      } else {
+      }
+ else {
         _showError(widget.sejourId != null ? 'Erreur lors de la modification' : 'Erreur lors de l\'enregistrement');
       }
     }
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: AppColors.error),
-    );
+    UIUtils.showErrorBanner(context, msg);
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -551,7 +572,13 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 label: 'NOM',
                 controller: _nomCtrl,
                 prefixIcon: Icons.person,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-ZÀ-ÿ\s-]')),
+                ],
+                validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
+
+
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -559,7 +586,13 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 label: 'PRÉNOM',
                 controller: _prenomCtrl,
                 prefixIcon: Icons.person_outline,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-ZÀ-ÿ\s-]')),
+                ],
+                validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
+
+
             ),
           ],
         ),
@@ -574,7 +607,9 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                     label: 'DATE NAISSANCE',
                     controller: _dateNaissCtrl,
                     prefixIcon: Icons.calendar_today,
+                    validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
                   ),
+
                 ),
               ),
             ),
@@ -584,7 +619,9 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 label: 'LIEU NAISSANCE',
                 controller: _lieuNaissCtrl,
                 prefixIcon: Icons.location_on,
+                validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
+
             ),
           ],
         ),
@@ -604,7 +641,14 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 controller: _telephoneCtrl,
                 prefixIcon: Icons.phone,
                 keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(15),
+                ],
+                validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
+
+
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -612,7 +656,9 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 label: 'PROFESSION',
                 controller: _professionCtrl,
                 prefixIcon: Icons.work_outline,
+                validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
+
             ),
           ],
         ),
@@ -622,7 +668,9 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
           controller: _lieuResCtrl,
           prefixIcon: Icons.home_work_outlined,
           hint: 'Quartier, Ville',
+          validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
         ),
+
       ],
     );
   }
@@ -646,8 +694,13 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 label: 'NUMÉRO DOCUMENT',
                 controller: _numDocCtrl,
                 prefixIcon: Icons.numbers,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
             ),
+
           ],
         ),
       ],
@@ -664,7 +717,13 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 label: 'CHAMBRE N°',
                 controller: _chambreCtrl,
                 prefixIcon: Icons.hotel,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
+
+
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -701,7 +760,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: options.contains(value) ? value : options.first,
+          value: options.contains(value) ? value : options.first,
           onChanged: onChanged,
           items: options
               .map(
@@ -710,8 +769,9 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                   child: Text(
                     e,
                     style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.bold,
                       fontSize: 14,
+                      color: AppColors.slate800,
                     ),
                   ),
                 ),
@@ -719,18 +779,22 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
               .toList(),
           decoration: InputDecoration(
             filled: true,
-            fillColor: Colors.white,
+            fillColor: AppColors.slate50,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: 12,
+              vertical: 14,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.slate200),
+              borderSide: const BorderSide(color: AppColors.slate300),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.slate200),
+              borderSide: const BorderSide(color: AppColors.slate300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.emerald600, width: 2),
             ),
           ),
         ),

@@ -6,6 +6,7 @@ import '../core/constants/app_colors.dart';
 import '../core/services/auth_service.dart';
 import '../core/widgets/custom_text_field.dart';
 import '../core/widgets/custom_button.dart';
+import '../core/services/cache_warmup_service.dart';
 
 class ConnexionScreen extends StatefulWidget {
   const ConnexionScreen({super.key});
@@ -77,6 +78,11 @@ class _ConnexionScreenState extends State<ConnexionScreen>
     if (res['success']) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('rester_connecte', _resterConnecte);
+      
+      // Lancer le préchauffage du cache pour les données hors-ligne
+      // S'exécute en arrière-plan sans bloquer la navigation vers le tableau.
+      CacheWarmupService().warmUp();
+
       if (mounted) context.go('/tableau');
     } else {
       setState(() {
