@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../core/constants/app_colors.dart';
 import '../core/services/auth_service.dart';
 import '../core/services/sejour_service.dart';
+import '../core/services/sync_service.dart';
 import '../core/models/user_model.dart';
 
 // ─── Modèle d'une stat card ────────────────────────────────────────────────
@@ -158,6 +160,7 @@ class _TableauScreenState extends State<TableauScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildSyncBadge(),
                     _buildHeader(),
                     const SizedBox(height: 24),
 
@@ -184,6 +187,69 @@ class _TableauScreenState extends State<TableauScreen> {
                 ),
               ),
             ),
+    );
+  }
+
+  // ── Sync Badge ──────────────────────────────────────────────────────────
+  Widget _buildSyncBadge() {
+    return ValueListenableBuilder(
+      valueListenable: Hive.box('sejours_offline').listenable(),
+      builder: (context, Box box, _) {
+        if (box.isEmpty) return const SizedBox.shrink();
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF3C7),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFFDE68A)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.sync_problem_rounded, color: Color(0xFFD97706), size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'MODE HORS-LIGNE',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFFD97706),
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    Text(
+                      '${box.length} séjour${box.length > 1 ? 's' : ''} en attente.',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF92400E),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => SyncService().processQueue(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD97706),
+                  minimumSize: const Size(80, 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(
+                  'SYNCHRO',
+                  style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

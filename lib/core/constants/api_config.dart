@@ -1,5 +1,5 @@
 class ApiConfig {
-  static const String baseUrl = 'http://10.10.42.16:8001/api';
+  static const String baseUrl = 'http://10.10.16.83:8001/api';
 
   // Auth
   static const String loginUrl = '/connexion/';

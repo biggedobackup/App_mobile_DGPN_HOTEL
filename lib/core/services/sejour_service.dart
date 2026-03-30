@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../constants/api_config.dart';
 import '../models/sejour_model.dart';
+import 'sync_service.dart';
 
 class SejourService {
   static const String _baseUrl = ApiConfig.baseUrl;
@@ -120,6 +122,18 @@ class SejourService {
     File? documentVerso,
   }) async {
     try {
+      // --- Vérification de la connexion ---
+      final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
+      if (connectivityResult.contains(ConnectivityResult.none)) {
+        await SyncService().addToQueue(
+          fields: fields,
+          photoClient: photoClient,
+          documentRecto: documentRecto,
+          documentVerso: documentVerso,
+        );
+        return true; // "Réussite" locale
+      }
+
       final token = await _getToken();
       final request = http.MultipartRequest(
         'POST',
@@ -140,9 +154,91 @@ class SejourService {
       }
 
       final response = await request.send();
-      return response.statusCode == 201 || response.statusCode == 200;
+      
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return true;
+      } else {
+        // Erreur API (pas forcément réseau) -> on tente quand même la sauvegarde locale pour ne pas perdre la donnée
+        await SyncService().addToQueue(
+          fields: fields,
+          photoClient: photoClient,
+          documentRecto: documentRecto,
+          documentVerso: documentVerso,
+        );
+        return true;
+      }
+    } catch (_) {
+      // Exception réseau -> sauvegarde locale
+      await SyncService().addToQueue(
+        fields: fields,
+        photoClient: photoClient,
+        documentRecto: documentRecto,
+        documentVerso: documentVerso,
+      );
+      return true;
+    }
+  }
+
+  Future<bool> updateSejour({
+    required int id,
+    required Map<String, String> fields,
+    File? photoClient,
+    File? documentRecto,
+    File? documentVerso,
+  }) async {
+    try {
+      final token = await _getToken();
+      final request = http.MultipartRequest(
+        'PATCH',
+        Uri.parse('$_baseUrl${ApiConfig.sejoursUrl}$id/'),
+      );
+      
+      request.headers['Authorization'] = 'Bearer $token';
+      request.fields.addAll(fields);
+
+      if (photoClient != null) {
+        request.files.add(await http.MultipartFile.fromPath('photo_client', photoClient.path));
+      }
+      if (documentRecto != null) {
+        request.files.add(await http.MultipartFile.fromPath('document_recto', documentRecto.path));
+      }
+      if (documentVerso != null) {
+        request.files.add(await http.MultipartFile.fromPath('document_verso', documentVerso.path));
+      }
+
+      final response = await request.send();
+      return response.statusCode == 200 || response.statusCode == 204;
     } catch (_) {
       return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> scanDocument({
+    required File recto,
+    File? verso,
+  }) async {
+    try {
+      final token = await _getToken();
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_baseUrl/sejours/scan-document/'),
+      );
+
+      request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(await http.MultipartFile.fromPath('recto', recto.path));
+      if (verso != null) {
+        request.files.add(await http.MultipartFile.fromPath('verso', verso.path));
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes));
+      }
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 

@@ -31,6 +31,13 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const EnregistrementScreen(),
     ),
     GoRoute(
+      path: '/enregistrement/:id/modifier',
+      builder: (context, state) {
+        final id = state.pathParameters['id'];
+        return EnregistrementScreen(sejourId: id);
+      },
+    ),
+    GoRoute(
       path: '/enregistrement/:id/detail',
       builder: (context, state) {
         final id = int.parse(state.pathParameters['id']!);

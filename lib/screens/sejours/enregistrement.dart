@@ -1,9 +1,14 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/constants/api_config.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/widgets/custom_text_field.dart';
 import '../../core/widgets/custom_button.dart';
@@ -11,7 +16,8 @@ import '../../core/widgets/section_header.dart';
 import '../../core/services/sejour_service.dart';
 
 class EnregistrementScreen extends StatefulWidget {
-  const EnregistrementScreen({super.key});
+  final String? sejourId;
+  const EnregistrementScreen({super.key, this.sejourId});
   @override
   State<EnregistrementScreen> createState() => _EnregistrementScreenState();
 }
@@ -20,6 +26,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   final _formKey = GlobalKey<FormState>();
   final _sejourService = SejourService();
   bool _loading = false;
+  bool _scanning = false;
 
   // Form Controllers
   final _nomCtrl = TextEditingController();
@@ -32,8 +39,6 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   final _numDocCtrl = TextEditingController();
   final _chambreCtrl = TextEditingController();
   final _dateEntreeCtrl = TextEditingController();
-  final _provenanceCtrl = TextEditingController();
-  final _destinationCtrl = TextEditingController();
 
   String _nationalite = 'Burkinabè';
   String _typeDoc = 'CNI';
@@ -44,6 +49,10 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   File? _docRecto;
   File? _docVerso;
 
+  String? _photoUrl;
+  String? _rectoUrl;
+  String? _versoUrl;
+
   List<String> _nationalites = ['Burkinabè'];
   final ImagePicker _picker = ImagePicker();
 
@@ -52,6 +61,53 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
     super.initState();
     _dateEntreeCtrl.text = DateTime.now().toString().substring(0, 16);
     _chargerDonnees();
+    if (widget.sejourId != null) {
+      _chargerSejourExistant();
+    }
+  }
+
+  Future<void> _chargerSejourExistant() async {
+    setState(() => _loading = true);
+    final id = int.tryParse(widget.sejourId!);
+    if (id != null) {
+      final s = await _sejourService.getSejourById(id);
+      if (s != null && mounted) {
+        setState(() {
+          _nomCtrl.text = s.nomClient;
+          _prenomCtrl.text = s.prenomClient;
+          _dateNaissCtrl.text = s.dateNaissance;
+          _lieuNaissCtrl.text = s.lieuNaissance;
+          _professionCtrl.text = s.profession;
+          _lieuResCtrl.text = s.lieuResidence;
+          _telephoneCtrl.text = s.contactTelephone;
+          _numDocCtrl.text = s.numeroDocument;
+          _chambreCtrl.text = s.numeroChambre;
+          
+          // Formattage de la date d'entrée
+          if (s.dateEntree.isNotEmpty) {
+            try {
+              // Si c'est une date ISO, on prend les 16 premiers caractères
+              _dateEntreeCtrl.text = s.dateEntree.length >= 16 
+                  ? s.dateEntree.substring(0, 16).replaceAll('T', ' ')
+                  : s.dateEntree;
+            } catch (_) {
+              _dateEntreeCtrl.text = s.dateEntree;
+            }
+          }
+          
+          _nationalite = s.nationalite;
+          _typeDoc = s.typeDocument;
+          _motifSejour = s.motifSejour;
+
+          _photoUrl = s.photoClient;
+          _rectoUrl = s.documentRecto;
+          _versoUrl = s.documentVerso;
+        });
+      }
+    }
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   Future<void> _chargerDonnees() async {
@@ -104,6 +160,98 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
         if (type == 'verso') _docVerso = File(picked.path);
         if (type == 'photo') _photoClient = File(picked.path);
       });
+
+      // Lancer le scan si c'est un document
+      if (type == 'recto' || type == 'verso') {
+        _lancerScan();
+      }
+    }
+  }
+
+  Future<void> _lancerScan() async {
+    if (_docRecto == null) return;
+    
+    if (mounted) {
+      setState(() => _scanning = true);
+    }
+
+    // --- Vérification de la connexion ---
+    final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult.contains(ConnectivityResult.none)) {
+      // Hors-ligne : on arrête ici silencieusement
+      if (mounted) {
+        setState(() => _scanning = false);
+      }
+      return;
+    }
+
+    final result = await _sejourService.scanDocument(
+      recto: _docRecto!,
+      verso: _docVerso,
+    );
+
+    if (result != null && result['success'] == true && mounted) {
+      final champs = result['champs'] as Map<String, dynamic>;
+      setState(() {
+        if (champs['Nom'] != null) _nomCtrl.text = champs['Nom'].toString();
+        if (champs['Prénoms'] != null) _prenomCtrl.text = champs['Prénoms'].toString();
+        if (champs['Date de naissance'] != null) _dateNaissCtrl.text = champs['Date de naissance'].toString();
+        if (champs['Lieu de naissance'] != null) _lieuNaissCtrl.text = champs['Lieu de naissance'].toString();
+        if (champs['Profession'] != null) _professionCtrl.text = champs['Profession'].toString();
+        if (champs['Numéro du document'] != null) _numDocCtrl.text = champs['Numéro du document'].toString();
+        if (champs['Nationalité'] != null) {
+           final natRaw = champs['Nationalité'].toString();
+           // Tenter de trouver le match exact dans la liste (insensible à la casse)
+           final found = _nationalites.firstWhere(
+             (n) => n.toUpperCase() == natRaw.toUpperCase(),
+             orElse: () => _nationalites.first,
+           );
+           _nationalite = found;
+        }
+        if (champs['Type de document'] != null) {
+          final t = champs['Type de document'].toString().toUpperCase();
+          if (t.contains('PASSPORT') || t.contains('PASSEPORT')) {
+            _typeDoc = 'PASSEPORT';
+          } else if (t.contains('CNI') || t.contains('ID') || t.contains('CARD')) {
+            _typeDoc = 'CNI';
+          }
+        }
+        if (champs['Pays de résidence'] != null) {
+          _lieuResCtrl.text = champs['Pays de résidence'].toString();
+        }
+      });
+
+      // --- Récupération automatique du portrait ---
+      if (result['portrait'] != null && _photoClient == null) {
+        try {
+          final String portraitB64 = result['portrait'];
+          final bytes = base64Decode(portraitB64);
+          final tempDir = await getTemporaryDirectory();
+          final portraitFile = File('${tempDir.path}/portrait_extracted.jpg');
+          await portraitFile.writeAsBytes(bytes);
+          
+          if (mounted) {
+            setState(() {
+              _photoClient = portraitFile;
+            });
+          }
+        } catch (e) {
+          debugPrint("Erreur lors de la récupération du portrait : $e");
+        }
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Données du document extraites avec succès'),
+            backgroundColor: AppColors.emerald600,
+          ),
+        );
+      }
+    }
+    
+    if (mounted) {
+      setState(() => _scanning = false);
     }
   }
 
@@ -128,7 +276,9 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
 
   Future<void> _soumettre() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_docRecto == null) {
+    
+    // Si on est en création, le document recto est obligatoire
+    if (widget.sejourId == null && _docRecto == null) {
       _showError('Pièce d\'identité (Recto) requise');
       return;
     }
@@ -148,31 +298,47 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
       'numero_document': _numDocCtrl.text.trim(),
       'numero_chambre': _chambreCtrl.text.trim(),
       'motif_sejour': _motifSejour,
-      'provenance': _provenanceCtrl.text.trim(),
-      'destination': _destinationCtrl.text.trim(),
       'hotel': _hotelId,
-      'date_entree': DateTime.now().toIso8601String(),
+      // On conserve la date d'entrée saisie ou on met la date actuelle
+      'date_entree': _dateEntreeCtrl.text.isNotEmpty 
+          ? _dateEntreeCtrl.text.replaceAll(' ', 'T') 
+          : DateTime.now().toIso8601String(),
     };
 
-    final success = await _sejourService.enregistrerSejour(
-      fields: fields,
-      photoClient: _photoClient,
-      documentRecto: _docRecto,
-      documentVerso: _docVerso,
-    );
+    bool success;
+    if (widget.sejourId != null) {
+      success = await _sejourService.updateSejour(
+        id: int.parse(widget.sejourId!),
+        fields: fields,
+        photoClient: _photoClient,
+        documentRecto: _docRecto,
+        documentVerso: _docVerso,
+      );
+    } else {
+      success = await _sejourService.enregistrerSejour(
+        fields: fields,
+        photoClient: _photoClient,
+        documentRecto: _docRecto,
+        documentVerso: _docVerso,
+      );
+    }
 
     if (mounted) {
       setState(() => _loading = false);
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Enregistrement réussi !'),
+          SnackBar(
+            content: Text(widget.sejourId != null ? 'Modification réussie !' : 'Enregistrement réussi !'),
             backgroundColor: AppColors.emerald600,
           ),
         );
-        context.go('/tableau');
+        if (widget.sejourId != null) {
+          Navigator.pop(context, true);
+        } else {
+          context.go('/tableau');
+        }
       } else {
-        _showError('Erreur lors de l\'enregistrement');
+        _showError(widget.sejourId != null ? 'Erreur lors de la modification' : 'Erreur lors de l\'enregistrement');
       }
     }
   }
@@ -186,10 +352,10 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.slate50,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
-          'NOUVEL ENREGISTREMENT',
+          widget.sejourId != null ? 'MODIFICATION' : 'ENREGISTREMENT',
           style: GoogleFonts.inter(
             fontWeight: FontWeight.w900,
             fontSize: 13,
@@ -197,57 +363,96 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
           ),
         ),
       ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SectionHeader(num: '01', title: 'Photos & Identité'),
-              const SizedBox(height: 16),
-              _buildPhotoGrid(),
-              const SizedBox(height: 28),
-
-              const SectionHeader(
-                num: '02',
-                title: 'Informations Personnelles',
-              ),
-              const SizedBox(height: 16),
-              _buildPersonalInfo(),
-              const SizedBox(height: 28),
-
-              const SectionHeader(num: '03', title: "Document d'identité"),
-              const SizedBox(height: 16),
-              _buildDocInfo(),
-              const SizedBox(height: 28),
-
-              const SectionHeader(num: '04', title: 'Détails du Séjour'),
-              const SizedBox(height: 16),
-              _buildStayInfo(),
-              const SizedBox(height: 32),
-
-              CustomButton(
-                label: "ENREGISTRER L'ENTRÉE",
-                onPressed: _soumettre,
-                isLoading: _loading,
-                icon: Icons.save_rounded,
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-      ),
+      body: _loading && widget.sejourId != null
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.emerald600),
+            )
+          : Stack(
+              children: [
+                SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SectionHeader(
+                          num: '01',
+                          title: 'Photos & Identité',
+                        ),
+                        const SizedBox(height: 16),
+                        _photoGrid(),
+                        const SizedBox(height: 28),
+                        const SectionHeader(
+                          num: '02',
+                          title: 'Informations Personnelles',
+                        ),
+                        const SizedBox(height: 16),
+                        _buildPersonalInfo(),
+                        const SizedBox(height: 28),
+                        const SectionHeader(
+                          num: '03',
+                          title: "Document d'identité",
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDocInfo(),
+                        const SizedBox(height: 28),
+                        const SectionHeader(
+                          num: '04',
+                          title: 'Détails du Séjour',
+                        ),
+                        const SizedBox(height: 16),
+                        _buildStayInfo(),
+                        const SizedBox(height: 32),
+                        CustomButton(
+                          label: widget.sejourId != null
+                              ? "MODIFIER LE SÉJOUR"
+                              : "ENREGISTRER L'ENTRÉE",
+                          onPressed: _soumettre,
+                          isLoading: _loading,
+                          icon: Icons.save_rounded,
+                        ),
+                        const SizedBox(height: 40),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_scanning)
+                  Container(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(color: Colors.white),
+                          const SizedBox(height: 16),
+                          Text(
+                            'ANALYSE DU DOCUMENT...',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.5,
+                              decoration: TextDecoration.none,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 
-  Widget _buildPhotoGrid() {
+  Widget _photoGrid() {
     return Row(
       children: [
         Expanded(
           child: _uploadBox(
             'RECTO',
             _docRecto,
+            _rectoUrl,
             () => _pickImage('recto'),
             Icons.article_outlined,
           ),
@@ -257,6 +462,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
           child: _uploadBox(
             'VERSO',
             _docVerso,
+            _versoUrl,
             () => _pickImage('verso'),
             Icons.article_outlined,
           ),
@@ -266,6 +472,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
           child: _uploadBox(
             'CLIENT',
             _photoClient,
+            _photoUrl,
             () => _pickImage('photo'),
             Icons.camera_alt_outlined,
           ),
@@ -277,6 +484,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   Widget _uploadBox(
     String label,
     File? file,
+    String? imageUrl,
     VoidCallback onTap,
     IconData icon,
   ) {
@@ -288,10 +496,14 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
             height: 100,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: file != null ? AppColors.emerald50 : Colors.white,
+              color: (file != null || (imageUrl != null && imageUrl.isNotEmpty)) 
+                  ? AppColors.emerald50 
+                  : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: file != null ? AppColors.emerald600 : AppColors.slate200,
+                color: (file != null || (imageUrl != null && imageUrl.isNotEmpty)) 
+                    ? AppColors.emerald600 
+                    : AppColors.slate200,
               ),
             ),
             child: file != null
@@ -299,7 +511,21 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                     borderRadius: BorderRadius.circular(11),
                     child: Image.file(file, fit: BoxFit.cover),
                   )
-                : Icon(icon, color: AppColors.slate400, size: 28),
+                : (imageUrl != null && imageUrl.isNotEmpty)
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(11),
+                        child: CachedNetworkImage(
+                          imageUrl: imageUrl.startsWith('http') 
+                              ? imageUrl 
+                              : '${ApiConfig.baseUrl}$imageUrl',
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          errorWidget: (context, url, error) => Icon(icon, color: AppColors.slate400, size: 28),
+                        ),
+                      )
+                    : Icon(icon, color: AppColors.slate400, size: 28),
           ),
           const SizedBox(height: 4),
           Text(
@@ -390,6 +616,13 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        CustomTextField(
+          label: 'LIEU DE RÉSIDENCE',
+          controller: _lieuResCtrl,
+          prefixIcon: Icons.home_work_outlined,
+          hint: 'Quartier, Ville',
+        ),
       ],
     );
   }
@@ -441,26 +674,6 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 'VISITE',
                 'AUTRE',
               ], (v) => setState(() => _motifSejour = v!)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: CustomTextField(
-                label: 'PROVENANCE',
-                controller: _provenanceCtrl,
-                prefixIcon: Icons.flight_takeoff,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: CustomTextField(
-                label: 'DESTINATION',
-                controller: _destinationCtrl,
-                prefixIcon: Icons.flight_land,
-              ),
             ),
           ],
         ),

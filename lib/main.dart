@@ -3,10 +3,18 @@ import 'package:google_fonts/google_fonts.dart';
 import 'routes/app_router.dart';
 import 'core/constants/app_colors.dart';
 
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'core/services/sync_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialisation du stockage local et synchro
+  await Hive.initFlutter();
+  await Hive.openBox('sejours_offline');
+  SyncService().init();
+  
   await initializeDateFormatting('fr_FR', null);
   runApp(const DgpnHotelApp());
 }

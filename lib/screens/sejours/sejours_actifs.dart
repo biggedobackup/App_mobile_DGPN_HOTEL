@@ -371,6 +371,7 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,24 +437,51 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
               ),
               const Divider(height: 24),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    s.motifSejour,
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.slate700,
+                   Expanded(
+                    child: Text(
+                      s.motifSejour,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.slate700,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: () => context.push('/enregistrement/${s.id}/modifier').then((_) => _charger()),
+                    icon: const Icon(Icons.edit, size: 12),
+                    label: const Text('MODIFIER'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.slate100,
+                      foregroundColor: AppColors.slate700,
+                      elevation: 0,
+                      minimumSize: const Size(64, 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      textStyle: GoogleFonts.inter(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: () => _showSortieModal(s),
-                    icon: const Icon(Icons.logout, size: 14),
+                    icon: const Icon(Icons.logout, size: 12),
                     label: const Text('SORTIE'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.error,
                       foregroundColor: Colors.white,
                       elevation: 0,
+                      minimumSize: const Size(64, 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       textStyle: GoogleFonts.inter(
                         fontWeight: FontWeight.w900,
                         fontSize: 10,

@@ -14,8 +14,6 @@ class SejourModel {
   final String dateEntree;
   final String? dateSortie;
   final String? observationsSortie;
-  final String provenance;
-  final String destination;
   final String motifSejour;
   final String numeroChambre;
   final int hotel;
@@ -43,8 +41,6 @@ class SejourModel {
     required this.dateEntree,
     this.dateSortie,
     this.observationsSortie,
-    required this.provenance,
-    required this.destination,
     required this.motifSejour,
     required this.numeroChambre,
     required this.hotel,
@@ -74,8 +70,6 @@ class SejourModel {
       dateEntree: json['date_entree'] ?? '',
       dateSortie: json['date_sortie'],
       observationsSortie: json['observations_sortie'],
-      provenance: json['provenance'] ?? '',
-      destination: json['destination'] ?? '',
       motifSejour: json['motif_sejour'] ?? '',
       numeroChambre: json['numero_chambre'] ?? '',
       hotel: json['hotel'] ?? 0,
