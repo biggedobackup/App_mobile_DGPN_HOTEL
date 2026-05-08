@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/utilisateur_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/models/user_model.dart';
+import '../../core/widgets/skeleton.dart';
 
 class UtilisateursListeScreen extends StatefulWidget {
   const UtilisateursListeScreen({super.key});
@@ -69,45 +70,7 @@ class _UtilisateursListeScreenState extends State<UtilisateursListeScreen> {
   }
 
 
-  Future<void> _confirmerSuppression(UserModel user) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('SUPPRIMER', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 14)),
-        content: Text(
-          'Voulez-vous vraiment supprimer ${user.fullName} ?\nCette action est irréversible.',
-          style: GoogleFonts.inter(fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('ANNULER', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.slate500)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('SUPPRIMER', style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: AppColors.error)),
-          ),
-        ],
-      ),
-    );
 
-    if (ok == true && user.id != null) {
-      setState(() => _loading = true);
-      final success = await _service.deleteUtilisateur(user.id!);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(success ? 'Utilisateur supprimé' : 'Erreur lors de la suppression'),
-          backgroundColor: success ? AppColors.emerald600 : AppColors.error,
-        ));
-        if (success) {
-          _charger();
-        } else {
-          setState(() => _loading = false);
-        }
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -178,7 +141,10 @@ class _UtilisateursListeScreenState extends State<UtilisateursListeScreen> {
           // Liste
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.emerald600))
+                ? const SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 100),
+                    child: ListSkeleton(itemCount: 8),
+                  )
                 : _filtered.isEmpty
                     ? _buildEmpty()
                     : RefreshIndicator(
@@ -319,9 +285,6 @@ class _UtilisateursListeScreenState extends State<UtilisateursListeScreen> {
                       await context.push('/utilisateurs/${user.id}/modifier');
                       _charger();
                     }),
-                    const SizedBox(height: 6),
-                    if (!estMoi)
-                      _iconBtn(Icons.delete_outline, AppColors.error, () => _confirmerSuppression(user)),
                   ],
                 ),
               ],

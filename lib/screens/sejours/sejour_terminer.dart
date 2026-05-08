@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shimmer/shimmer.dart';
+import '../../core/widgets/skeleton.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/sejour_service.dart';
 import '../../core/models/sejour_model.dart';
@@ -104,7 +104,7 @@ class _SejourTerminerScreenState extends State<SejourTerminerScreen> {
       backgroundColor: AppColors.slate50,
       appBar: AppBar(
         title: Text(
-          'SÉJOURS TERMINÉS',
+          'SORTIES PRÉVUES',
           style: GoogleFonts.inter(
             fontWeight: FontWeight.w900,
             fontSize: 13,
@@ -140,23 +140,9 @@ class _SejourTerminerScreenState extends State<SejourTerminerScreen> {
   }
 
   Widget _buildShimmerList() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      itemCount: 8,
-      itemBuilder: (_, __) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Shimmer.fromColors(
-          baseColor: Colors.grey[200]!,
-          highlightColor: Colors.grey[50]!,
-          child: Container(
-            height: 90,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        ),
-      ),
+    return const SingleChildScrollView(
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: ListSkeleton(itemCount: 8),
     );
   }
 
@@ -239,10 +225,18 @@ class _SejourTerminerScreenState extends State<SejourTerminerScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Sortie le : ${s.formattedDateSortie}',
+                      'Arrivée : ${s.formattedDateArrivee}',
                       style: GoogleFonts.inter(
-                        fontSize: 11,
+                        fontSize: 10,
                         color: AppColors.slate500,
+                      ),
+                    ),
+                    Text(
+                      'Sortie  : ${s.formattedDateSortie}',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.emerald600,
                       ),
                     ),
                   ],

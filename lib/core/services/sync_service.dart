@@ -249,11 +249,14 @@ class SyncService {
           );
 
           if (imagesOk) {
-            // Nettoyage des fichiers locaux (libération stockage)
-            await _deleteLocalFiles([photo, recto, verso]);
+            // NOTE: On ne supprime plus les fichiers locaux immédiatement après la synchro
+            // pour permettre la consultation hors-ligne des images même si la connexion repart.
+            // Le nettoyage sera géré globalement par une tâche de maintenance.
+            // await _deleteLocalFiles([photo, recto, verso]); 
+            
             await box.delete(item.hiveKey);
             // ignore: avoid_print
-            print('✅ [Bulk] Séjour ${item.localUuid} synchronisé (texte + images).');
+            print('✅ [Bulk] Séjour ${item.localUuid} synchronisé (texte + images). Fichiers conservés pour cache local.');
           } else {
             // Images échouées → on garde en queue pour retry
             // Le texte est idempotent (update_or_create), donc le retry est safe
@@ -274,12 +277,23 @@ class SyncService {
   }
 
   /// Supprime une liste de fichiers locaux silencieusement.
-  Future<void> _deleteLocalFiles(List<File?> files) async {
+  Future<void> deleteLocalFiles(List<File?> files) async {
     for (final f in files) {
       try {
         if (f != null && await f.exists()) await f.delete();
       } catch (_) {}
     }
+  }
+
+  /// Vide tout le dossier d'images hors-ligne (maintenance).
+  Future<void> clearAllSyncImages() async {
+    try {
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final offlineImagesDir = Directory(p.join(appDocDir.path, 'offline_images'));
+      if (await offlineImagesDir.exists()) {
+        await offlineImagesDir.delete(recursive: true);
+      }
+    } catch (_) {}
   }
 
   // ════════════════════════════════════════════════════════════════════════

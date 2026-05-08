@@ -54,7 +54,6 @@ void main() async {
   // Configuration de Workmanager pour la synchronisation en arrière-plan
   await Workmanager().initialize(
     callbackDispatcher,
-    isInDebugMode: false,
   );
   
   // Tâche périodique (toutes les 15 min minimum par défaut sur Android)
@@ -157,30 +156,43 @@ class GlobalOfflineBanner extends StatelessWidget {
         if (!isOffline) return const SizedBox.shrink();
 
         return Positioned(
-          top: MediaQuery.of(context).padding.top,
-          left: 0,
-          right: 0,
+          top: MediaQuery.of(context).padding.top + 10,
+          left: 70,
+          right: 70,
           child: Material(
             color: Colors.transparent,
             child: Container(
-              color: const Color(0xFFD97706), // Amber-600
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD97706), // Amber-600
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
               child: SafeArea(
                 bottom: false,
                 top: false,
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
-                    const SizedBox(width: 12),
-                    Expanded(
+                    const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 14),
+                    const SizedBox(width: 8),
+                    Flexible(
                       child: Text(
-                        'MODE HORS-LIGNE — Vos données sont sauvegardées localement.',
+                        'MODE HORS-LIGNE',
                         style: GoogleFonts.inter(
                           color: Colors.white,
-                          fontSize: 10,
+                          fontSize: 9,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 0.5,
                         ),
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],

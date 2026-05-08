@@ -58,6 +58,10 @@ class CacheWarmupService {
       _warmHistoriqueSejours(),
     ], eagerError: false);
 
+
+    // Préchauffage des détails (historique client) pour les séjours déjà en cache
+    await _warmClientDetails();
+    
     _isWarming = false;
 
     // Sauvegarder la timestamp du dernier préchauffage complet
@@ -185,6 +189,46 @@ class CacheWarmupService {
     } catch (_) {
       // ignore: avoid_print
       print('[CacheWarmup] ⚠️ Historique séjours échoué');
+    }
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Préchauffage approfondi des fiches clients (Historique)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Future<void> _warmClientDetails() async {
+    try {
+      final cacheBox = Hive.box('cache');
+      final Set<String> processedKeys = {};
+      
+      // On récupère les séjours des 3 boîtes principales pour extraire les clients
+      final keys = ['sejours_actifs_p1', 'sejours_termines_p1', 'historique_sejours_p1'];
+      
+      for (var key in keys) {
+        final data = cacheBox.get(key);
+        if (data == null) continue;
+        
+        final results = data['results'] as List? ?? [];
+        // On limite à 10 clients par catégorie pour ne pas surcharger
+        for (var i = 0; i < results.length && i < 10; i++) {
+          final s = results[i];
+          final nom = s['nom_client'];
+          final prenom = s['prenom_client'];
+          final doc = s['numero_document'];
+          
+          if (nom == null || prenom == null || doc == null) continue;
+          
+          final uniqueKey = '${nom}_${prenom}_$doc';
+          if (processedKeys.contains(uniqueKey)) continue;
+          
+          await _sejourService.getClientHistorique(nom, prenom, doc);
+          processedKeys.add(uniqueKey);
+        }
+      }
+      // ignore: avoid_print
+      print('[CacheWarmup] ✅ ${processedKeys.length} fiches historiques clients pré-chargées.');
+    } catch (e) {
+       // ignore: avoid_print
+      print('[CacheWarmup] ⚠️ Échec warmClientDetails: $e');
     }
   }
 

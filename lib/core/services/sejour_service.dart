@@ -36,16 +36,17 @@ class SejourService {
 
   /// Télécharge et met en cache les images d'un séjour de manière proactive.
   void _preCacheSejourImages(Map<String, dynamic> json) {
-    _downloadFile(json['photo_client']);
-    _downloadFile(json['document_recto']);
-    _downloadFile(json['document_verso']);
+    final client = json['client'] ?? json['client_details'] ?? json;
+    _downloadFile(client['photo_client']);
+    _downloadFile(client['document_recto']);
+    _downloadFile(client['document_verso']);
   }
 
   Future<void> _downloadFile(String? url) async {
     if (url == null || url.isEmpty) return;
     try {
       final fullUrl = url.startsWith('http') ? url : '${ApiConfig.baseUrl}$url';
-      
+
       // getSingleFile télécharge l'image si elle n'est pas déjà présente
       // et la stocke dans le cache dont dépend CachedNetworkImage.
       await DefaultCacheManager().getSingleFile(fullUrl);
@@ -60,23 +61,29 @@ class SejourService {
   }) async {
     final cacheBox = Hive.box('cache');
     final cacheKey = 'sejours_actifs_p$page';
-    
+
     try {
       final token = await _getToken();
       final queryParams = {
         'page': '$page',
         if (search != null && search.isNotEmpty) 'search': search,
-        if (dateDebut != null && dateDebut.isNotEmpty) 'date_creation__gte': dateDebut,
-        if (dateFin != null && dateFin.isNotEmpty) 'date_creation__lte': dateFin,
+        if (dateDebut != null && dateDebut.isNotEmpty)
+          'date_creation__gte': dateDebut,
+        if (dateFin != null && dateFin.isNotEmpty)
+          'date_creation__lte': dateFin,
       };
 
-      final uri = Uri.parse('$_baseUrl${ApiConfig.sejoursActifsUrl}').replace(queryParameters: queryParams);
-      final response = await http.get(uri, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 5));
+      final uri = Uri.parse(
+        '$_baseUrl${ApiConfig.sejoursActifsUrl}',
+      ).replace(queryParameters: queryParams);
+      final response = await http
+          .get(uri, headers: {'Authorization': 'Bearer $token'})
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         final List<dynamic> results = data['results'] ?? [];
-        
+
         // Mise en cache individuelle de chaque séjour pour permettre l'accès au détail hors-ligne
         for (var json in results) {
           if (json['id'] != null) {
@@ -99,7 +106,8 @@ class SejourService {
           }).toList();
 
           finalData['results'] = [...offlineResults, ...finalData['results']];
-          finalData['count'] = (finalData['count'] as int) + offlineResults.length;
+          finalData['count'] =
+              (finalData['count'] as int) + offlineResults.length;
         }
 
         // Mise en cache (on stocke le JSON brut pour plus de simplicité)
@@ -131,10 +139,7 @@ class SejourService {
         };
       }
 
-      return {
-        'count': cachedData['count'] ?? 0,
-        'results': resultsModels,
-      };
+      return {'count': cachedData['count'] ?? 0, 'results': resultsModels};
     }
 
     return {'count': 0, 'results': <SejourModel>[]};
@@ -153,14 +158,18 @@ class SejourService {
         if (search != null && search.isNotEmpty) 'search': search,
       };
 
-      final uri = Uri.parse('$_baseUrl${ApiConfig.sejoursTerminesUrl}').replace(queryParameters: queryParams);
-      final response = await http.get(uri, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 5));
+      final uri = Uri.parse(
+        '$_baseUrl${ApiConfig.sejoursTerminesUrl}',
+      ).replace(queryParameters: queryParams);
+      final response = await http
+          .get(uri, headers: {'Authorization': 'Bearer $token'})
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         await cacheBox.put(cacheKey, data);
         final List<dynamic> results = data['results'] ?? [];
-        
+
         // Mise en cache individuelle de chaque séjour pour permettre l'accès au détail hors-ligne
         for (var json in results) {
           if (json['id'] != null) {
@@ -176,14 +185,18 @@ class SejourService {
         };
       }
     } catch (_) {}
-    
+
     final cached = cacheBox.get(cacheKey);
     if (cached != null) {
       final Map<String, dynamic> cachedData = Map<String, dynamic>.from(cached);
       final List<dynamic> results = cachedData['results'] ?? [];
       return {
         'count': cachedData['count'] ?? 0,
-        'results': results.map((json) => SejourModel.fromJson(Map<String, dynamic>.from(json))).toList(),
+        'results': results
+            .map(
+              (json) => SejourModel.fromJson(Map<String, dynamic>.from(json)),
+            )
+            .toList(),
       };
     }
     return {'count': 0, 'results': <SejourModel>[]};
@@ -194,6 +207,9 @@ class SejourService {
     String? search,
     String? dateDebut,
     String? dateFin,
+    String? hotel,
+    String? statut,
+    String? nationalite,
   }) async {
     final cacheBox = Hive.box('cache');
     final cacheKey = 'historique_sejours_p$page';
@@ -202,18 +218,28 @@ class SejourService {
       final queryParams = {
         'page': '$page',
         if (search != null && search.isNotEmpty) 'search': search,
-        if (dateDebut != null && dateDebut.isNotEmpty) 'date_creation__gte': dateDebut,
-        if (dateFin != null && dateFin.isNotEmpty) 'date_creation__lte': dateFin,
+        if (dateDebut != null && dateDebut.isNotEmpty)
+          'date_creation__gte': dateDebut,
+        if (dateFin != null && dateFin.isNotEmpty)
+          'date_creation__lte': dateFin,
+        if (hotel != null && hotel.isNotEmpty) 'hotel': hotel,
+        if (statut != null && statut.isNotEmpty) 'statut': statut,
+        if (nationalite != null && nationalite.isNotEmpty)
+          'nationalite': nationalite,
       };
 
-      final uri = Uri.parse('$_baseUrl${ApiConfig.historiqueSejoursUrl}').replace(queryParameters: queryParams);
-      final response = await http.get(uri, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 5));
+      final uri = Uri.parse(
+        '$_baseUrl${ApiConfig.historiqueSejoursUrl}',
+      ).replace(queryParameters: queryParams);
+      final response = await http
+          .get(uri, headers: {'Authorization': 'Bearer $token'})
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         await cacheBox.put(cacheKey, data);
         final List<dynamic> results = data['results'] ?? [];
-        
+
         // Mise en cache individuelle de chaque séjour pour permettre l'accès au détail hors-ligne
         for (var json in results) {
           if (json['id'] != null) {
@@ -225,22 +251,12 @@ class SejourService {
 
         final Map<String, dynamic> finalData = {
           'count': data['count'] ?? 0,
-          'results': results.map((json) => SejourModel.fromJson(json)).toList(),
+          'results': results
+              .map((json) => ClientHistoriqueModel.fromJson(json))
+              .toList(),
         };
 
-        // --- FUSION DONNÉES HORS-LIGNE (Uniquement page 1) ---
-        if (page == 1) {
-          final boxOffline = Hive.box('sejours_offline');
-          final List<SejourModel> offlineResults = boxOffline.values.map((raw) {
-            return SejourModel.fromOffline(jsonDecode(raw as String));
-          }).toList();
-
-          finalData['results'] = [...offlineResults, ...finalData['results']];
-          finalData['count'] = (finalData['count'] as int) + offlineResults.length;
-        }
-
         return finalData;
-
       }
     } catch (_) {}
 
@@ -250,27 +266,16 @@ class SejourService {
       final List<dynamic> results = cachedData['results'] ?? [];
 
       final resultsModels = results
-          .map((json) => SejourModel.fromJson(Map<String, dynamic>.from(json)))
+          .map(
+            (json) =>
+                ClientHistoriqueModel.fromJson(Map<String, dynamic>.from(json)),
+          )
           .toList();
 
-      if (page == 1) {
-        final boxOffline = Hive.box('sejours_offline');
-        final List<SejourModel> offlineResults = boxOffline.values.map((raw) {
-          return SejourModel.fromOffline(jsonDecode(raw as String));
-        }).toList();
-        return {
-          'count': (cachedData['count'] ?? 0) + offlineResults.length,
-          'results': [...offlineResults, ...resultsModels],
-        };
-      }
-
-      return {
-        'count': cachedData['count'] ?? 0,
-        'results': resultsModels,
-      };
+      return {'count': cachedData['count'] ?? 0, 'results': resultsModels};
     }
 
-    return {'count': 0, 'results': <SejourModel>[]};
+    return {'count': 0, 'results': <ClientHistoriqueModel>[]};
   }
 
   Future<bool> enregistrerSejour({
@@ -301,25 +306,46 @@ class SejourService {
         'POST',
         Uri.parse('$_baseUrl${ApiConfig.sejoursUrl}'),
       );
-      
+
       request.headers['Authorization'] = 'Bearer $token';
       request.fields.addAll(fields);
 
       if (photoClient != null) {
-        request.files.add(await http.MultipartFile.fromPath('photo_client', photoClient.path));
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'photo_client',
+            photoClient.path,
+            filename: 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          ),
+        );
       }
       if (documentRecto != null) {
-        request.files.add(await http.MultipartFile.fromPath('document_recto', documentRecto.path));
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'document_recto',
+            documentRecto.path,
+            filename: 'recto_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          ),
+        );
       }
       if (documentVerso != null) {
-        request.files.add(await http.MultipartFile.fromPath('document_verso', documentVerso.path));
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'document_verso',
+            documentVerso.path,
+            filename: 'verso_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          ),
+        );
       }
 
       final response = await request.send();
-      
+      final respBody = await response.stream.bytesToString();
+      print("RESPONSE BODY: $respBody");
+
       if (response.statusCode == 201 || response.statusCode == 200) {
         return true;
       } else {
+        print("API ERROR ${response.statusCode}: falling back to offline");
         // Erreur API (pas forcément réseau) -> on tente quand même la sauvegarde locale pour ne pas perdre la donnée
         if (!fromSync) {
           await SyncService().addToQueue(
@@ -360,18 +386,30 @@ class SejourService {
         'PATCH',
         Uri.parse('$_baseUrl${ApiConfig.sejoursUrl}$id/'),
       );
-      
+
       request.headers['Authorization'] = 'Bearer $token';
       request.fields.addAll(fields);
 
       if (photoClient != null) {
-        request.files.add(await http.MultipartFile.fromPath('photo_client', photoClient.path));
+        request.files.add(
+          await http.MultipartFile.fromPath('photo_client', photoClient.path),
+        );
       }
       if (documentRecto != null) {
-        request.files.add(await http.MultipartFile.fromPath('document_recto', documentRecto.path));
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'document_recto',
+            documentRecto.path,
+          ),
+        );
       }
       if (documentVerso != null) {
-        request.files.add(await http.MultipartFile.fromPath('document_verso', documentVerso.path));
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'document_verso',
+            documentVerso.path,
+          ),
+        );
       }
 
       final response = await request.send();
@@ -395,7 +433,9 @@ class SejourService {
       request.headers['Authorization'] = 'Bearer $token';
       request.files.add(await http.MultipartFile.fromPath('recto', recto.path));
       if (verso != null) {
-        request.files.add(await http.MultipartFile.fromPath('verso', verso.path));
+        request.files.add(
+          await http.MultipartFile.fromPath('verso', verso.path),
+        );
       }
 
       final streamedResponse = await request.send();
@@ -421,29 +461,51 @@ class SejourService {
     try {
       final bool offline = await _isOfflineSafe();
       if (offline) {
-        if (!fromSync) await SyncService().addSortieToQueue(sejourId, dateSortie, observations);
+        if (!fromSync) {
+          await SyncService().addSortieToQueue(
+            sejourId,
+            dateSortie,
+            observations,
+          );
+        }
         return !fromSync; // false pour le SyncService (il doit savoir que c'est un échec)
       }
 
       final headers = await _getHeaders();
-      final response = await http.post(
-        Uri.parse('$_baseUrl${ApiConfig.sejoursUrl}$sejourId/enregistrer_sortie/'),
-        headers: headers,
-        body: jsonEncode({
-          'date_sortie': dateSortie,
-          'observations_sortie': observations,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse(
+              '$_baseUrl${ApiConfig.sejoursUrl}$sejourId/enregistrer_sortie/',
+            ),
+            headers: headers,
+            body: jsonEncode({
+              'date_sortie': dateSortie,
+              'observations_sortie': observations,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         return true;
       }
       // Erreur API inattendue -> mise en queue pour retry
-      if (!fromSync) await SyncService().addSortieToQueue(sejourId, dateSortie, observations);
+      if (!fromSync) {
+        await SyncService().addSortieToQueue(
+          sejourId,
+          dateSortie,
+          observations,
+        );
+      }
       return !fromSync;
     } catch (_) {
       // Exception réseau -> mise en queue
-      if (!fromSync) await SyncService().addSortieToQueue(sejourId, dateSortie, observations);
+      if (!fromSync) {
+        await SyncService().addSortieToQueue(
+          sejourId,
+          dateSortie,
+          observations,
+        );
+      }
       return !fromSync;
     }
   }
@@ -454,7 +516,9 @@ class SejourService {
     try {
       final token = await _getToken();
       final uri = Uri.parse('$_baseUrl${ApiConfig.sejoursUrl}$id/');
-      final response = await http.get(uri, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 4));
+      final response = await http
+          .get(uri, headers: {'Authorization': 'Bearer $token'})
+          .timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -464,22 +528,35 @@ class SejourService {
     } catch (_) {
       // Erreur réseau : check cache
     }
-    
+
     final cached = cacheBox.get(cacheKey);
-    return cached != null ? SejourModel.fromJson(Map<String, dynamic>.from(cached)) : null;
+    return cached != null
+        ? SejourModel.fromJson(Map<String, dynamic>.from(cached))
+        : null;
   }
 
-  Future<ClientHistoriqueModel?> getClientHistorique(String nom, String prenom, String document) async {
+  Future<ClientHistoriqueModel?> getClientHistorique(
+    String nom,
+    String prenom,
+    String document,
+  ) async {
+    // Note: Cette méthode est dépréciée au profit de getClientHistoriqueById
+    // car le backend utilise désormais l'ID numérique du client.
+    return null;
+  }
+
+  Future<ClientHistoriqueModel?> getClientHistoriqueById(int clientId) async {
     final cacheBox = Hive.box('cache');
-    final cacheKey = 'client_hist_${nom}_${prenom}_$document';
+    final cacheKey = 'client_hist_id_$clientId';
     try {
       final token = await _getToken();
-      // Le Backend ViewSet (Retrieve) attend un PK au format : "nom_prenom_numerodocument"
-      final pk = '${nom}_${prenom}_$document';
-      final encodedPk = Uri.encodeComponent(pk);
-      final uri = Uri.parse('$_baseUrl${ApiConfig.clientHistoriqueUrl}$encodedPk/');
-      
-      final response = await http.get(uri, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 10));
+      final uri = Uri.parse(
+        '$_baseUrl${ApiConfig.clientHistoriqueUrl}$clientId/',
+      );
+
+      final response = await http
+          .get(uri, headers: {'Authorization': 'Bearer $token'})
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -489,19 +566,45 @@ class SejourService {
     } catch (_) {}
 
     final cached = cacheBox.get(cacheKey);
-    return cached != null ? ClientHistoriqueModel.fromJson(Map<String, dynamic>.from(cached)) : null;
+    return cached != null
+        ? ClientHistoriqueModel.fromJson(Map<String, dynamic>.from(cached))
+        : null;
   }
-
 
   Future<List<dynamic>> getNationalites() async {
     final cacheBox = Hive.box('cache');
     const cacheKey = 'nationalites_list';
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$_baseUrl${ApiConfig.nationalitesUrl}'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .get(
+            Uri.parse('$_baseUrl${ApiConfig.nationalitesUrl}'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+        // Mise en cache pour usage hors-ligne
+        await cacheBox.put(cacheKey, data);
+        return data;
+      }
+    } catch (_) {}
+
+    // Fallback : liste locale mise en cache lors de la dernière connexion
+    final cached = cacheBox.get(cacheKey);
+    if (cached != null) return List<dynamic>.from(cached);
+    return [];
+  }
+
+  Future<List<dynamic>> getPays() async {
+    final cacheBox = Hive.box('cache');
+    const cacheKey = 'pays_list';
+    try {
+      final headers = await _getHeaders();
+      final response = await http
+          .get(Uri.parse('$_baseUrl${ApiConfig.paysUrl}'), headers: headers)
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes)) as List;
@@ -519,7 +622,7 @@ class SejourService {
 
   Future<Map<String, dynamic>?> getStats() async {
     final cacheBox = Hive.box('cache');
-    
+
     Map<String, dynamic>? parseCache(dynamic cachedData) {
       if (cachedData == null) return null;
       final stats = Map<String, dynamic>.from(cachedData);
@@ -544,9 +647,15 @@ class SejourService {
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         final stats = {
-          'nombre_clients_en_sejour': (data['nombre_clients_en_sejour'] ?? 0) + Hive.box('sejours_offline').length,
-          'nombre_sorties_clients': (data['nombre_sorties_clients'] ?? 0) + Hive.box('sorties_offline').length,
-          'nombre_enregistrements_clients': (data['nombre_enregistrements_clients'] ?? 0) + Hive.box('sejours_offline').length,
+          'nombre_clients_en_sejour':
+              (data['nombre_clients_en_sejour'] ?? 0) +
+              Hive.box('sejours_offline').length,
+          'nombre_sorties_clients':
+              (data['nombre_sorties_clients'] ?? 0) +
+              Hive.box('sorties_offline').length,
+          'nombre_enregistrements_clients':
+              (data['nombre_enregistrements_clients'] ?? 0) +
+              Hive.box('sejours_offline').length,
           'nombre_historique_sejours': data['nombre_historique_sejours'] ?? 0,
           'nombre_utilisateurs': data['nombre_utilisateurs'] ?? 0,
           'activites_recentes': data['activites_recentes'] ?? [],
@@ -565,14 +674,16 @@ class SejourService {
           };
         }).toList();
 
-        stats['activites_recentes'] = [...offlineSejours, ...stats['activites_recentes']];
+        stats['activites_recentes'] = [
+          ...offlineSejours,
+          ...stats['activites_recentes'],
+        ];
 
         // Mettre en cache
         await cacheBox.put('last_stats', stats);
         return stats;
       }
 
-      
       // En cas d'erreur API, on tente le cache
       return parseCache(cacheBox.get('last_stats'));
     } catch (_) {
@@ -588,7 +699,8 @@ class SejourService {
   /// Retourne un Map {local_uuid → db_id} pour les items créés/mis à jour.
   /// Retourne null si la requête réseau échoue complètement.
   Future<Map<String, int>?> sendSejoursEnMasse(
-      List<Map<String, dynamic>> sejours) async {
+    List<Map<String, dynamic>> sejours,
+  ) async {
     try {
       final token = await _getToken();
       final response = await http
@@ -609,7 +721,9 @@ class SejourService {
         return rawIds.map((k, v) => MapEntry(k.toString(), v as int));
       }
       // ignore: avoid_print
-      print('[SejourService.sendSejoursEnMasse] HTTP ${response.statusCode}: ${response.body.substring(0, response.body.length.clamp(0, 200))}');
+      print(
+        '[SejourService.sendSejoursEnMasse] HTTP ${response.statusCode}: ${response.body.substring(0, response.body.length.clamp(0, 200))}',
+      );
       return null;
     } catch (e) {
       // ignore: avoid_print
@@ -640,21 +754,42 @@ class SejourService {
       request.fields['local_uuid'] = localUuid;
 
       if (photo != null && await photo.exists()) {
-        request.files
-            .add(await http.MultipartFile.fromPath('photo_client', photo.path));
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'photo_client',
+            photo.path,
+            filename: 'photo_$localUuid.jpg',
+          ),
+        );
       }
       if (recto != null && await recto.exists()) {
         request.files.add(
-            await http.MultipartFile.fromPath('document_recto', recto.path));
+          await http.MultipartFile.fromPath(
+            'document_recto',
+            recto.path,
+            filename: 'recto_$localUuid.jpg',
+          ),
+        );
       }
       if (verso != null && await verso.exists()) {
         request.files.add(
-            await http.MultipartFile.fromPath('document_verso', verso.path));
+          await http.MultipartFile.fromPath(
+            'document_verso',
+            verso.path,
+            filename: 'verso_$localUuid.jpg',
+          ),
+        );
       }
 
-      final streamedResponse =
-          await request.send().timeout(const Duration(seconds: 30));
-      return streamedResponse.statusCode == 200;
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 30),
+      );
+      if (streamedResponse.statusCode != 200) {
+        final respStr = await streamedResponse.stream.bytesToString();
+        print("UPLOAD IMAGES ERROR ${streamedResponse.statusCode}: $respStr");
+        return false;
+      }
+      return true;
     } catch (e) {
       // ignore: avoid_print
       print('[SejourService.uploadImagesParUuid] Exception: $e');
@@ -662,4 +797,3 @@ class SejourService {
     }
   }
 }
-

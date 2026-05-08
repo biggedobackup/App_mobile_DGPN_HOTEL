@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/utilisateur_service.dart';
 import '../../core/models/user_model.dart';
+import '../../core/widgets/skeleton.dart';
 
 class UtilisateurDetailScreen extends StatefulWidget {
   final int userId;
@@ -59,7 +60,22 @@ class _UtilisateurDetailScreenState extends State<UtilisateurDetailScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.emerald600))
+          ? const SingleChildScrollView(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Skeleton(height: 120, borderRadius: 16),
+                  SizedBox(height: 20),
+                  Skeleton(height: 25, width: 200),
+                  SizedBox(height: 12),
+                  Skeleton(height: 180, borderRadius: 16),
+                  SizedBox(height: 20),
+                  Skeleton(height: 25, width: 150),
+                  SizedBox(height: 12),
+                  Skeleton(height: 100, borderRadius: 16),
+                ],
+              ),
+            )
           : _error != null
               ? _buildError()
               : _buildContent(),

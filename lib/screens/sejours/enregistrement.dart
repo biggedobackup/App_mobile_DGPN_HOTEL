@@ -8,16 +8,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-
-import '../../core/constants/api_config.dart';
+import '../../core/widgets/dgpn_image.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/widgets/custom_text_field.dart';
 import '../../core/widgets/custom_button.dart';
 import '../../core/widgets/section_header.dart';
+import '../../core/widgets/skeleton.dart';
 import '../../core/services/sejour_service.dart';
 import '../../core/utils/ui_utils.dart';
-
 
 class EnregistrementScreen extends StatefulWidget {
   final String? sejourId;
@@ -43,10 +41,20 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   final _numDocCtrl = TextEditingController();
   final _chambreCtrl = TextEditingController();
   final _dateEntreeCtrl = TextEditingController();
+  final _dateSortiePrevueCtrl = TextEditingController();
+
+  final _nomJeuneFilleCtrl = TextEditingController();
+  final _adresseCompleteCtrl = TextEditingController();
+  final _dateDelivranceDocCtrl = TextEditingController();
+  final _venantDeCtrl = TextEditingController();
+  final _allantACtrl = TextEditingController();
+  final _immatriculationCtrl = TextEditingController();
 
   String _nationalite = 'Burkinabè';
   String _typeDoc = 'CNI';
   String _motifSejour = 'AFFAIRES';
+  String _moyenTransport = 'AUTRE';
+  String _paysDelivrance = 'Burkina Faso';
   String _hotelId = '';
 
   File? _photoClient;
@@ -56,8 +64,10 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   String? _photoUrl;
   String? _rectoUrl;
   String? _versoUrl;
+  String? _localUuid;
 
   List<String> _nationalites = ['Burkinabè'];
+  List<String> _paysList = ['Burkina Faso'];
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -86,26 +96,39 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
           _telephoneCtrl.text = s.contactTelephone;
           _numDocCtrl.text = s.numeroDocument;
           _chambreCtrl.text = s.numeroChambre;
-          
+          _nomJeuneFilleCtrl.text = s.client.nomJeuneFille ?? '';
+          _adresseCompleteCtrl.text = s.client.adresseComplete ?? '';
+          _dateDelivranceDocCtrl.text = s.client.dateDelivranceDoc ?? '';
+          _paysDelivrance = s.client.paysDelivranceDoc ?? 'Burkina Faso';
+          _venantDeCtrl.text = s.venantDe ?? '';
+          _allantACtrl.text = s.allantA ?? '';
+          _immatriculationCtrl.text = s.numeroImmatriculation ?? '';
+
           // Formattage de la date d'entrée
           if (s.dateEntree.isNotEmpty) {
             try {
               // Si c'est une date ISO, on prend les 16 premiers caractères
-              _dateEntreeCtrl.text = s.dateEntree.length >= 16 
+              _dateEntreeCtrl.text = s.dateEntree.length >= 16
                   ? s.dateEntree.substring(0, 16).replaceAll('T', ' ')
                   : s.dateEntree;
             } catch (_) {
               _dateEntreeCtrl.text = s.dateEntree;
             }
           }
-          
+
+          if (s.dateSortiePrevue != null && s.dateSortiePrevue!.isNotEmpty) {
+            _dateSortiePrevueCtrl.text = s.dateSortiePrevue!.split('T')[0];
+          }
+
           _nationalite = s.nationalite;
           _typeDoc = s.typeDocument;
           _motifSejour = s.motifSejour;
+          _moyenTransport = s.moyenTransport ?? 'AUTRE';
 
           _photoUrl = s.photoClient;
           _rectoUrl = s.documentRecto;
           _versoUrl = s.documentVerso;
+          _localUuid = s.identifiantUnique;
         });
       }
     }
@@ -124,6 +147,16 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
     if (nats.isNotEmpty && mounted) {
       setState(() {
         _nationalites = nats.map((e) => e.toString()).toList();
+      });
+    }
+
+    final pays = await _sejourService.getPays();
+    if (pays.isNotEmpty && mounted) {
+      setState(() {
+        _paysList = pays.map((e) => e.toString()).toList();
+        if (!_paysList.contains(_paysDelivrance)) {
+          _paysDelivrance = _paysList.first;
+        }
       });
     }
   }
@@ -178,13 +211,14 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
 
   Future<void> _lancerScan() async {
     if (_docRecto == null) return;
-    
+
     if (mounted) {
       setState(() => _scanning = true);
     }
 
     // --- Vérification de la connexion ---
-    final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
+    final List<ConnectivityResult> connectivityResult = await Connectivity()
+        .checkConnectivity();
     if (connectivityResult.contains(ConnectivityResult.none)) {
       // Hors-ligne : on arrête ici silencieusement
       if (mounted) {
@@ -202,25 +236,37 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
       final champs = result['champs'] as Map<String, dynamic>;
       setState(() {
         if (champs['Nom'] != null) _nomCtrl.text = champs['Nom'].toString();
-        if (champs['Prénoms'] != null) _prenomCtrl.text = champs['Prénoms'].toString();
-        if (champs['Date de naissance'] != null) _dateNaissCtrl.text = champs['Date de naissance'].toString();
-        if (champs['Lieu de naissance'] != null) _lieuNaissCtrl.text = champs['Lieu de naissance'].toString();
-        if (champs['Profession'] != null) _professionCtrl.text = champs['Profession'].toString();
-        if (champs['Numéro du document'] != null) _numDocCtrl.text = champs['Numéro du document'].toString();
+        if (champs['Prénoms'] != null) {
+          _prenomCtrl.text = champs['Prénoms'].toString();
+        }
+        if (champs['Date de naissance'] != null) {
+          _dateNaissCtrl.text = champs['Date de naissance'].toString();
+        }
+        if (champs['Lieu de naissance'] != null) {
+          _lieuNaissCtrl.text = champs['Lieu de naissance'].toString();
+        }
+        if (champs['Profession'] != null) {
+          _professionCtrl.text = champs['Profession'].toString();
+        }
+        if (champs['Numéro du document'] != null) {
+          _numDocCtrl.text = champs['Numéro du document'].toString();
+        }
         if (champs['Nationalité'] != null) {
-           final natRaw = champs['Nationalité'].toString();
-           // Tenter de trouver le match exact dans la liste (insensible à la casse)
-           final found = _nationalites.firstWhere(
-             (n) => n.toUpperCase() == natRaw.toUpperCase(),
-             orElse: () => _nationalites.first,
-           );
-           _nationalite = found;
+          final natRaw = champs['Nationalité'].toString();
+          // Tenter de trouver le match exact dans la liste (insensible à la casse)
+          final found = _nationalites.firstWhere(
+            (n) => n.toUpperCase() == natRaw.toUpperCase(),
+            orElse: () => _nationalites.first,
+          );
+          _nationalite = found;
         }
         if (champs['Type de document'] != null) {
           final t = champs['Type de document'].toString().toUpperCase();
           if (t.contains('PASSPORT') || t.contains('PASSEPORT')) {
             _typeDoc = 'PASSEPORT';
-          } else if (t.contains('CNI') || t.contains('ID') || t.contains('CARD')) {
+          } else if (t.contains('CNI') ||
+              t.contains('ID') ||
+              t.contains('CARD')) {
             _typeDoc = 'CNI';
           }
         }
@@ -237,7 +283,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
           final tempDir = await getTemporaryDirectory();
           final portraitFile = File('${tempDir.path}/portrait_extracted.jpg');
           await portraitFile.writeAsBytes(bytes);
-          
+
           if (mounted) {
             setState(() {
               _photoClient = portraitFile;
@@ -247,7 +293,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
           debugPrint("Erreur lors de la récupération du portrait : $e");
         }
       }
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -257,7 +303,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
         );
       }
     }
-    
+
     if (mounted) {
       setState(() => _scanning = false);
     }
@@ -284,7 +330,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
 
   Future<void> _soumettre() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     // Validation des documents si création
     if (widget.sejourId == null) {
       if (_docRecto == null) {
@@ -312,12 +358,23 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
       'numero_document': _numDocCtrl.text.trim(),
       'numero_chambre': _chambreCtrl.text.trim(),
       'motif_sejour': _motifSejour,
+      'nom_jeune_fille': _nomJeuneFilleCtrl.text.trim(),
+      'adresse_complete': _adresseCompleteCtrl.text.trim(),
+      'date_delivrance_doc': _dateDelivranceDocCtrl.text,
+      'pays_delivrance_doc': _paysDelivrance,
+      'venant_de': _venantDeCtrl.text.trim(),
+      'allant_a': _allantACtrl.text.trim(),
+      'moyen_transport': _moyenTransport,
+      'numero_immatriculation': _immatriculationCtrl.text.trim(),
       'hotel': _hotelId,
-      'date_entree': _dateEntreeCtrl.text.isNotEmpty 
-          ? _dateEntreeCtrl.text.replaceAll(' ', 'T') 
+      'date_entree': _dateEntreeCtrl.text.isNotEmpty
+          ? _dateEntreeCtrl.text.replaceAll(' ', 'T')
           : DateTime.now().toIso8601String(),
+      'date_sortie_prevue': _dateSortiePrevueCtrl.text,
     };
 
+    // DRF n'accepte pas toujours les chaînes vides ("") pour des dates ou des champs avec choices
+    fields.removeWhere((key, value) => value.isEmpty);
 
     bool success;
     if (widget.sejourId != null) {
@@ -340,10 +397,12 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
     if (mounted) {
       setState(() => _loading = false);
       if (success) {
-        final List<ConnectivityResult> connectivityResult =
-            await Connectivity().checkConnectivity();
-        final bool isOffline =
-            connectivityResult.contains(ConnectivityResult.none);
+        final List<ConnectivityResult> connectivityResult = await Connectivity()
+            .checkConnectivity();
+        if (!mounted) return;
+        final bool isOffline = connectivityResult.contains(
+          ConnectivityResult.none,
+        );
 
         UIUtils.showSuccessBanner(
           context,
@@ -351,15 +410,17 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
           isOffline: isOffline,
         );
 
-
         if (widget.sejourId != null) {
           Navigator.pop(context, true);
         } else {
           context.go('/tableau');
         }
-      }
- else {
-        _showError(widget.sejourId != null ? 'Erreur lors de la modification' : 'Erreur lors de l\'enregistrement');
+      } else {
+        _showError(
+          widget.sejourId != null
+              ? 'Erreur lors de la modification'
+              : 'Erreur lors de l\'enregistrement',
+        );
       }
     }
   }
@@ -368,15 +429,13 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
     UIUtils.showErrorBanner(context, msg);
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
-          widget.sejourId != null ? 'MODIFICATION' : 'ENREGISTREMENT',
+          widget.sejourId != null ? 'MODIFICATION' : 'ENREGISTRER SÉJOUR',
           style: GoogleFonts.inter(
             fontWeight: FontWeight.w900,
             fontSize: 13,
@@ -385,9 +444,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
         ),
       ),
       body: _loading && widget.sejourId != null
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.emerald600),
-            )
+          ? const FormSkeleton()
           : Stack(
               children: [
                 SingleChildScrollView(
@@ -428,7 +485,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                         CustomButton(
                           label: widget.sejourId != null
                               ? "MODIFIER LE SÉJOUR"
-                              : "ENREGISTRER L'ENTRÉE",
+                              : "ENREGISTRER LE CLIENT",
                           onPressed: _soumettre,
                           isLoading: _loading,
                           icon: Icons.save_rounded,
@@ -517,13 +574,14 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
             height: 100,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: (file != null || (imageUrl != null && imageUrl.isNotEmpty)) 
-                  ? AppColors.emerald50 
+              color: (file != null || (imageUrl != null && imageUrl.isNotEmpty))
+                  ? AppColors.emerald50
                   : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: (file != null || (imageUrl != null && imageUrl.isNotEmpty)) 
-                    ? AppColors.emerald600 
+                color:
+                    (file != null || (imageUrl != null && imageUrl.isNotEmpty))
+                    ? AppColors.emerald600
                     : AppColors.slate200,
               ),
             ),
@@ -533,20 +591,21 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                     child: Image.file(file, fit: BoxFit.cover),
                   )
                 : (imageUrl != null && imageUrl.isNotEmpty)
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(11),
-                        child: CachedNetworkImage(
-                          imageUrl: imageUrl.startsWith('http') 
-                              ? imageUrl 
-                              : '${ApiConfig.baseUrl}$imageUrl',
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => const Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          errorWidget: (context, url, error) => Icon(icon, color: AppColors.slate400, size: 28),
-                        ),
-                      )
-                    : Icon(icon, color: AppColors.slate400, size: 28),
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(11),
+                    child: DgpnImage(
+                      url: imageUrl,
+                      localUuid: _localUuid,
+                      type: label == 'PHOTO CLIENT'
+                          ? DgpnImageType.photo
+                          : label == 'DOCUMENT RECTO'
+                          ? DgpnImageType.recto
+                          : DgpnImageType.verso,
+                      fit: BoxFit.cover,
+                      placeholderIcon: icon,
+                    ),
+                  )
+                : Icon(icon, color: AppColors.slate400, size: 28),
           ),
           const SizedBox(height: 4),
           Text(
@@ -577,8 +636,6 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 ],
                 validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
-
-
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -591,8 +648,6 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 ],
                 validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
-
-
             ),
           ],
         ),
@@ -607,9 +662,9 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                     label: 'DATE NAISSANCE',
                     controller: _dateNaissCtrl,
                     prefixIcon: Icons.calendar_today,
-                    validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? 'Requis' : null,
                   ),
-
                 ),
               ),
             ),
@@ -621,7 +676,6 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 prefixIcon: Icons.location_on,
                 validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
-
             ),
           ],
         ),
@@ -647,8 +701,6 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 ],
                 validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
-
-
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -658,7 +710,6 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 prefixIcon: Icons.work_outline,
                 validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
-
             ),
           ],
         ),
@@ -670,7 +721,18 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
           hint: 'Quartier, Ville',
           validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
         ),
-
+        const SizedBox(height: 12),
+        CustomTextField(
+          label: 'NOM DE JEUNE FILLE',
+          controller: _nomJeuneFilleCtrl,
+          prefixIcon: Icons.person_add_alt,
+        ),
+        const SizedBox(height: 12),
+        CustomTextField(
+          label: 'ADRESSE COMPLÈTE',
+          controller: _adresseCompleteCtrl,
+          prefixIcon: Icons.map_outlined,
+        ),
       ],
     );
   }
@@ -695,12 +757,37 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 controller: _numDocCtrl,
                 prefixIcon: Icons.numbers,
                 inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
+                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
                 ],
                 validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
             ),
-
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => _choisirDate(_dateDelivranceDocCtrl),
+                child: AbsorbPointer(
+                  child: CustomTextField(
+                    label: 'DATE DÉLIVRANCE',
+                    controller: _dateDelivranceDocCtrl,
+                    prefixIcon: Icons.calendar_month,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _dropdownField(
+                'PAYS DÉLIVRANCE',
+                _paysDelivrance,
+                _paysList,
+                (v) => setState(() => _paysDelivrance = v!),
+              ),
+            ),
           ],
         ),
       ],
@@ -717,13 +804,9 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 label: 'CHAMBRE N°',
                 controller: _chambreCtrl,
                 prefixIcon: Icons.hotel,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
-
-
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -735,6 +818,58 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
               ], (v) => setState(() => _motifSejour = v!)),
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: CustomTextField(
+                label: 'PROVENANCE',
+                controller: _venantDeCtrl,
+                prefixIcon: Icons.flight_land,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: CustomTextField(
+                label: 'DESTINATION',
+                controller: _allantACtrl,
+                prefixIcon: Icons.flight_takeoff,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _dropdownField(
+                'TRANSPORT',
+                _moyenTransport,
+                ['AVION', 'TRAIN', 'VOITURE', 'CAR', 'AUTRE'],
+                (v) => setState(() => _moyenTransport = v!),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: CustomTextField(
+                label: 'IMMATRICULATION',
+                controller: _immatriculationCtrl,
+                prefixIcon: Icons.numbers,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: () => _choisirDate(_dateSortiePrevueCtrl),
+          child: AbsorbPointer(
+            child: CustomTextField(
+              label: 'DATE DE SORTIE PRÉVUE',
+              controller: _dateSortiePrevueCtrl,
+              prefixIcon: Icons.calendar_today_outlined,
+            ),
+          ),
         ),
       ],
     );
@@ -760,7 +895,8 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: options.contains(value) ? value : options.first,
+          isExpanded: true,
+          initialValue: options.contains(value) ? value : options.first,
           onChanged: onChanged,
           items: options
               .map(
@@ -794,7 +930,10 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.emerald600, width: 2),
+              borderSide: const BorderSide(
+                color: AppColors.emerald600,
+                width: 2,
+              ),
             ),
           ),
         ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shimmer/shimmer.dart';
+import '../../core/widgets/skeleton.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:photo_view/photo_view.dart';
 import '../../core/constants/app_colors.dart';
@@ -9,6 +9,8 @@ import '../../core/services/sejour_service.dart';
 import '../../core/widgets/custom_button.dart';
 import '../../core/widgets/custom_text_field.dart';
 import '../../core/utils/ui_utils.dart';
+import '../../core/widgets/dgpn_image.dart';
+
 
 
 class SejourDetailScreen extends StatefulWidget {
@@ -64,20 +66,18 @@ class _SejourDetailScreenState extends State<SejourDetailScreen> {
   }
 
   Widget _buildShimmerDetail() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Shimmer.fromColors(
-        baseColor: Colors.grey[200]!,
-        highlightColor: Colors.grey[50]!,
-        child: Column(
-          children: [
-            Container(height: 200, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24))),
-            const SizedBox(height: 24),
-            Container(height: 150, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24))),
-            const SizedBox(height: 24),
-            Container(height: 150, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24))),
-          ],
-        ),
+    return const SingleChildScrollView(
+      padding: EdgeInsets.all(24),
+      child: Column(
+        children: [
+          Skeleton(height: 200, borderRadius: 24),
+          SizedBox(height: 24),
+          Skeleton(height: 150, borderRadius: 24),
+          SizedBox(height: 24),
+          Skeleton(height: 150, borderRadius: 24),
+          SizedBox(height: 24),
+          Skeleton(height: 150, borderRadius: 24),
+        ],
       ),
     );
   }
@@ -112,7 +112,11 @@ class _SejourDetailScreenState extends State<SejourDetailScreen> {
             _buildInfoRow(Icons.phone, 'TÉLÉPHONE', s.contactTelephone),
             _buildInfoRow(Icons.flag, 'NATIONALITÉ', s.nationalite),
             _buildInfoRow(Icons.cake, 'NAISSANCE', '${s.dateNaissance} à ${s.lieuNaissance}'),
+            if (s.client.nomJeuneFille != null && s.client.nomJeuneFille!.isNotEmpty)
+              _buildInfoRow(Icons.person, 'NOM JEUNE FILLE', s.client.nomJeuneFille!),
             _buildInfoRow(Icons.home, 'RÉSIDENCE', s.lieuResidence),
+            if (s.client.adresseComplete != null && s.client.adresseComplete!.isNotEmpty)
+              _buildInfoRow(Icons.location_on, 'ADRESSE', s.client.adresseComplete!),
           ]),
           
           const SizedBox(height: 16),
@@ -122,7 +126,16 @@ class _SejourDetailScreenState extends State<SejourDetailScreen> {
             _buildInfoRow(Icons.hotel, 'CHAMBRE', s.numeroChambre),
             _buildInfoRow(Icons.notes, 'MOTIF', s.motifSejour),
             _buildInfoRow(Icons.login, 'ENTRÉE', s.formattedDateArrivee),
+            _buildInfoRow(Icons.event_note, 'SORTIE PRÉVUE', s.formattedDateSortiePrevue),
             _buildInfoRow(Icons.logout, 'SORTIE', s.formattedDateSortie),
+            if (s.venantDe != null && s.venantDe!.isNotEmpty)
+              _buildInfoRow(Icons.flight_land, 'PROVENANCE', s.venantDe!),
+            if (s.allantA != null && s.allantA!.isNotEmpty)
+              _buildInfoRow(Icons.flight_takeoff, 'DESTINATION', s.allantA!),
+            if (s.moyenTransport != null && s.moyenTransport!.isNotEmpty)
+              _buildInfoRow(Icons.directions_car, 'TRANSPORT', s.moyenTransport!),
+            if (s.numeroImmatriculation != null && s.numeroImmatriculation!.isNotEmpty)
+              _buildInfoRow(Icons.numbers, 'IMMATRICULATION', s.numeroImmatriculation!),
           ]),
 
           const SizedBox(height: 16),
@@ -130,6 +143,10 @@ class _SejourDetailScreenState extends State<SejourDetailScreen> {
           _buildInfoSection('PIÈCE D\'IDENTITÉ', [
             _buildInfoRow(Icons.badge, 'TYPE', s.typeDocument),
             _buildInfoRow(Icons.numbers, 'NUMÉRO', s.numeroDocument),
+            if (s.client.dateDelivranceDoc != null && s.client.dateDelivranceDoc!.isNotEmpty)
+              _buildInfoRow(Icons.calendar_month, 'DÉLIVRANCE', s.client.dateDelivranceDoc!),
+            if (s.client.paysDelivranceDoc != null && s.client.paysDelivranceDoc!.isNotEmpty)
+              _buildInfoRow(Icons.public, 'PAYS DÉLIVRANCE', s.client.paysDelivranceDoc!),
             const SizedBox(height: 12),
             _buildDocumentScans(s),
           ]),
@@ -176,15 +193,16 @@ class _SejourDetailScreenState extends State<SejourDetailScreen> {
       ),
       child: Column(
         children: [
-          CircleAvatar(
-            radius: 48,
-            backgroundImage: s.photoClient != null
-                ? CachedNetworkImageProvider(s.photoClient!)
-                : null,
-            backgroundColor: AppColors.slate50,
-            child: s.photoClient == null
-                ? const Icon(Icons.person, size: 48, color: AppColors.slate300)
-                : null,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: DgpnImage(
+              url: s.photoClient,
+              localUuid: s.identifiantUnique,
+              type: DgpnImageType.photo,
+              width: 96,
+              height: 96,
+              placeholderIcon: Icons.person,
+            ),
           ),
           const SizedBox(height: 16),
           Text(
@@ -240,16 +258,16 @@ class _SejourDetailScreenState extends State<SejourDetailScreen> {
     return Row(
       children: [
         if (s.documentRecto != null)
-          Expanded(child: _buildImageThumbnail('RECTO', s.documentRecto!)),
+          Expanded(child: _buildImageThumbnail('RECTO', s.documentRecto!, s)),
         if (s.documentRecto != null && s.documentVerso != null)
           const SizedBox(width: 12),
         if (s.documentVerso != null)
-          Expanded(child: _buildImageThumbnail('VERSO', s.documentVerso!)),
+          Expanded(child: _buildImageThumbnail('VERSO', s.documentVerso!, s)),
       ],
     );
   }
 
-  Widget _buildImageThumbnail(String label, String url) {
+  Widget _buildImageThumbnail(String label, String url, SejourModel s) {
     return GestureDetector(
       onTap: () => _showFullScreenImage(url, label),
       child: Column(
@@ -270,11 +288,11 @@ class _SejourDetailScreenState extends State<SejourDetailScreen> {
                 borderRadius: BorderRadius.circular(12),
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: CachedNetworkImage(
-                    imageUrl: url,
+                  child: DgpnImage(
+                    url: url,
+                    localUuid: s.identifiantUnique,
+                    type: label == 'RECTO' ? DgpnImageType.recto : DgpnImageType.verso,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(color: AppColors.slate50),
-                    errorWidget: (context, url, error) => const Icon(Icons.error),
                   ),
                 ),
               ),

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:shimmer/shimmer.dart';
+import '../core/widgets/skeleton.dart';
 import '../core/constants/app_colors.dart';
 import '../core/services/auth_service.dart';
 import '../core/services/sejour_service.dart';
@@ -144,9 +144,17 @@ class _TableauScreenState extends State<TableauScreen> {
 
     final all = [
       _StatItem(
+        id: 'enregistrement',
+        icon: Icons.person_add_alt_1_outlined,
+        label: 'Enregistrer séjour',
+        value: d['nombre_enregistrements_clients']?.toString() ?? '0',
+        route: '/enregistrement',
+        color: const Color(0xFFA855F7), // Purple
+      ),
+      _StatItem(
         id: 'sorties',
         icon: Icons.logout_outlined,
-        label: 'Sortie Clients',
+        label: 'Sorties prévues',
         value: d['nombre_sorties_clients']?.toString() ?? '0',
         route: '/sejour-terminer',
         color: const Color(0xFFF59E0B),
@@ -154,7 +162,7 @@ class _TableauScreenState extends State<TableauScreen> {
       _StatItem(
         id: 'actifs',
         icon: Icons.hotel_outlined,
-        label: 'Clients en Séjour',
+        label: 'Séjours en cours',
         value: d['nombre_clients_en_sejour']?.toString() ?? '0',
         route: '/sejours-actifs',
         color: AppColors.emerald600,
@@ -236,20 +244,8 @@ class _TableauScreenState extends State<TableauScreen> {
                     const SizedBox(height: 12),
                     _buildStatsGrid(),
 
-                    const SizedBox(height: 28),
+                    // Fin des stats
 
-                    // ── Section : Actions Rapides (Gérant uniquement) ──
-                    if (_user?.role == 'GERANT_HOTEL') ...[
-                      _buildSectionTitle('Actions Rapides'),
-                      const SizedBox(height: 12),
-                      _buildQuickActions(),
-                      const SizedBox(height: 28),
-                    ],
-
-                    // ── Section : Activités Récentes ───────────────────
-                    _buildSectionTitle('Activités Récentes'),
-                    const SizedBox(height: 12),
-                    _buildRecentActivities(),
                   ],
                 ),
               ),
@@ -500,7 +496,7 @@ class _TableauScreenState extends State<TableauScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 1),
+                  const SizedBox(height: 6),
                   Text(
                     stat.value,
                     style: GoogleFonts.inter(
@@ -520,278 +516,6 @@ class _TableauScreenState extends State<TableauScreen> {
     );
   }
 
-  // ── Actions Rapides (Gérant) ───────────────────────────────────────────
-  Widget _buildQuickActions() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF059669), Color(0xFF047857)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.emerald600.withValues(alpha: 0.3),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Actions Rapides',
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Accès direct aux fonctionnalités',
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              color: Colors.white.withValues(alpha: 0.8),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _quickActionBtn(
-                  label: 'Enregistrer',
-                  icon: Icons.person_add_outlined,
-                  route: '/enregistrement',
-                  isWhite: true,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _quickActionBtn(
-                  label: 'Clients actifs',
-                  icon: Icons.hotel_outlined,
-                  route: '/sejours-actifs',
-                  isWhite: false,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _quickActionBtn(
-                  label: 'Utilisateurs',
-                  icon: Icons.people_outline,
-                  route: '/utilisateurs',
-                  isWhite: false,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _quickActionBtn(
-                  label: 'Historique',
-                  icon: Icons.history_outlined,
-                  route: '/historique-sejours',
-                  isWhite: false,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _quickActionBtn({
-    required String label,
-    required IconData icon,
-    required String route,
-    required bool isWhite,
-  }) {
-    return InkWell(
-      onTap: () => context.push(route),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: BoxDecoration(
-          color: isWhite ? Colors.white : Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon,
-                size: 16,
-                color: isWhite ? AppColors.emerald700 : Colors.white),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: isWhite ? AppColors.emerald700 : Colors.white,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Activités Récentes ─────────────────────────────────────────────────
-  Widget _buildRecentActivities() {
-    final List activities = _stats['activites_recentes'] ?? [];
-
-    if (activities.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(40),
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.slate100),
-        ),
-        child: Column(
-          children: [
-            Icon(Icons.history_outlined, size: 40, color: AppColors.slate200),
-            const SizedBox(height: 12),
-            Text(
-              'Aucune activité récente',
-              style: GoogleFonts.inter(color: AppColors.slate400, fontSize: 13),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.slate100),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(4),
-        itemCount: activities.length,
-        separatorBuilder: (_, _) => const Divider(height: 1, color: AppColors.slate100),
-        itemBuilder: (context, index) {
-          final act = activities[index];
-          return _activityItem(act);
-        },
-      ),
-    );
-  }
-
-  Widget _activityItem(Map<String, dynamic> act) {
-    final int? id = act['id'];
-    final String nom = act['nom'] ?? 'Client inconnu';
-    final String hotel = act['hotel'] ?? '';
-    final String date = act['date'] ?? '';
-    final String statut = act['statut'] ?? '';
-
-    final bool isActif = statut.toLowerCase().contains('séjour') ||
-        statut.toLowerCase().contains('sejour') ||
-        statut.toLowerCase().contains('actif');
-
-    final Color dotColor = isActif ? AppColors.emerald600 : const Color(0xFFF59E0B);
-    final Color dotBg = isActif ? AppColors.emerald50 : const Color(0xFFFEF3C7);
-
-    return InkWell(
-      onTap: id == null ? null : () => context.push('/enregistrement/$id/detail'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          children: [
-            // Icône / dot
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: dotBg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Center(
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: dotColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            // Nom & hotel
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    nom.toUpperCase(),
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.slate800,
-                    ),
-                  ),
-                  if (hotel.isNotEmpty)
-                    Text(
-                      hotel,
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color: AppColors.slate500,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
-              ),
-            ),
-            // Date & statut
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  date,
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    color: AppColors.slate400,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  statut,
-                  style: GoogleFonts.inter(
-                    fontSize: 9,
-                    color: AppColors.slate500,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   // ── Drawer ─────────────────────────────────────────────────────────────
   Widget _buildDrawer() {
@@ -822,10 +546,10 @@ class _TableauScreenState extends State<TableauScreen> {
               style: GoogleFonts.inter(fontSize: 12),
             ),
           ),
-          _drawerItem(Icons.dashboard_outlined, 'Tableau de bord', '/tableau', true),
-          _drawerItem(Icons.person_add_outlined, 'Enregistrement', '/enregistrement', false),
-          _drawerItem(Icons.hotel_outlined, 'Clients en séjour', '/sejours-actifs', false),
-          _drawerItem(Icons.check_circle_outline, 'Séjours terminés', '/sejour-terminer', false),
+          _drawerItem(Icons.dashboard_outlined, 'Tableau de Bord', '/tableau', true),
+          _drawerItem(Icons.person_add_outlined, 'Enregistrer séjour', '/enregistrement', false),
+          _drawerItem(Icons.hotel_outlined, 'Séjours en cours', '/sejours-actifs', false),
+          _drawerItem(Icons.check_circle_outline, 'Sorties prévues', '/sejour-terminer', false),
           _drawerItem(Icons.history_outlined, 'Historique des séjours', '/historique-sejours', false),
           if (isGerant)
             _drawerItem(Icons.people_outline, 'Gestion des Utilisateurs', '/utilisateurs', false),
@@ -893,74 +617,33 @@ class _TableauScreenState extends State<TableauScreen> {
 
   Widget _buildShimmerTableau() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Shimmer.fromColors(
-        baseColor: Colors.grey[200]!,
-        highlightColor: Colors.grey[50]!,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 100,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Skeleton(height: 100, borderRadius: 16),
+          const SizedBox(height: 24),
+          const Skeleton(height: 12, width: 100),
+          const SizedBox(height: 12),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 6,
+              childAspectRatio: 2.8,
             ),
-            const SizedBox(height: 24),
-            Container(
-              width: 100,
-              height: 12,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            const SizedBox(height: 12),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 6,
-                childAspectRatio: 2.8,
-              ),
-              itemCount: 4,
-              itemBuilder: (_, __) => Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              height: 180,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              width: 150,
-              height: 12,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              height: 200,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ],
-        ),
+            itemCount: 4,
+            itemBuilder: (_, _) => const Skeleton(borderRadius: 12),
+          ),
+          const SizedBox(height: 24),
+          const Skeleton(height: 180, borderRadius: 20),
+          const SizedBox(height: 24),
+          const Skeleton(height: 12, width: 150),
+          const SizedBox(height: 12),
+          const ListSkeleton(itemCount: 3),
+        ],
       ),
     );
   }

@@ -7,6 +7,7 @@ import '../core/services/utilisateur_service.dart';
 import '../core/models/user_model.dart';
 import '../core/widgets/custom_button.dart';
 import '../core/widgets/custom_text_field.dart';
+import '../core/widgets/skeleton.dart';
 
 class ProfilScreen extends StatefulWidget {
   const ProfilScreen({super.key});
@@ -220,7 +221,20 @@ class _ProfilScreenState extends State<ProfilScreen> {
         ],
       ),
       body: _loading 
-        ? const Center(child: CircularProgressIndicator(color: AppColors.emerald600))
+        ? const SingleChildScrollView(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Skeleton(height: 120, borderRadius: 32),
+                SizedBox(height: 32),
+                Skeleton(height: 200, borderRadius: 24),
+                SizedBox(height: 24),
+                Skeleton(height: 150, borderRadius: 24),
+                SizedBox(height: 24),
+                Skeleton(height: 100, borderRadius: 24),
+              ],
+            ),
+          )
         : SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Form(

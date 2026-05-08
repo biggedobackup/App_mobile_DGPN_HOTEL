@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shimmer/shimmer.dart';
+import '../../core/widgets/skeleton.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/sejour_service.dart';
 import '../../core/models/sejour_model.dart';
@@ -9,6 +9,7 @@ import '../../core/widgets/custom_text_field.dart';
 import '../../core/widgets/custom_button.dart';
 import '../../core/utils/debouncer.dart';
 import '../../core/utils/ui_utils.dart';
+import '../../core/widgets/dgpn_image.dart';
 
 
 class SejoursActifsScreen extends StatefulWidget {
@@ -243,7 +244,7 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
       backgroundColor: AppColors.slate50,
       appBar: AppBar(
         title: Text(
-          'SÉJOURS ACTIFS',
+          'SÉJOURS EN COURS',
           style: GoogleFonts.inter(
             fontWeight: FontWeight.w900,
             fontSize: 13,
@@ -272,23 +273,9 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
   }
 
   Widget _buildShimmerList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(20),
-      itemCount: 6,
-      itemBuilder: (_, __) => Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: Shimmer.fromColors(
-          baseColor: Colors.grey[200]!,
-          highlightColor: Colors.grey[50]!,
-          child: Container(
-            height: 140,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        ),
-      ),
+    return const SingleChildScrollView(
+      padding: EdgeInsets.all(20),
+      child: ListSkeleton(itemCount: 6),
     );
   }
 
@@ -411,7 +398,7 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
           const Icon(Icons.hotel_class_rounded, size: 64, color: AppColors.slate300),
           const SizedBox(height: 16),
           Text(
-            'Aucun séjour actif trouvé',
+            'Aucun séjour en cours trouvé',
             style: GoogleFonts.inter(color: AppColors.slate500),
           ),
         ],
@@ -467,14 +454,15 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    backgroundColor: AppColors.emerald50,
-                    child: Text(
-                      s.nomClient[0].toUpperCase(),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.emerald700,
-                      ),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: DgpnImage(
+                      url: s.photoClient,
+                      localUuid: s.identifiantUnique,
+                      type: DgpnImageType.photo,
+                      width: 40,
+                      height: 40,
+                      placeholderIcon: Icons.person,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -506,6 +494,15 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
                             color: AppColors.slate400,
                           ),
                         ),
+                        if (s.dateSortiePrevue != null && s.dateSortiePrevue!.isNotEmpty)
+                          Text(
+                            'Sortie prévue: ${s.formattedDateSortiePrevue}',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.emerald600,
+                            ),
+                          ),
                       ],
                     ),
                   ),

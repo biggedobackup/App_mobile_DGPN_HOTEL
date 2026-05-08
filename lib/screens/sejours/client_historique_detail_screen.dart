@@ -3,17 +3,17 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/sejour_model.dart';
 import '../../core/services/sejour_service.dart';
+import '../../core/widgets/skeleton.dart';
+import '../../core/widgets/dgpn_image.dart';
+
+
 
 class ClientHistoriqueDetailScreen extends StatefulWidget {
-  final String nom;
-  final String prenom;
-  final String numeroDocument;
+  final int clientId;
 
   const ClientHistoriqueDetailScreen({
     super.key,
-    required this.nom,
-    required this.prenom,
-    required this.numeroDocument,
+    required this.clientId,
   });
 
   @override
@@ -33,7 +33,7 @@ class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScr
 
   Future<void> _charger() async {
     setState(() => _loading = true);
-    final h = await _sejourService.getClientHistorique(widget.nom, widget.prenom, widget.numeroDocument);
+    final h = await _sejourService.getClientHistoriqueById(widget.clientId);
     if (mounted) {
       setState(() {
         _historique = h;
@@ -45,7 +45,27 @@ class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScr
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator(color: AppColors.emerald600)));
+      return Scaffold(
+        appBar: AppBar(backgroundColor: Colors.white, elevation: 0),
+        body: const SingleChildScrollView(
+          padding: EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Skeleton(height: 180, borderRadius: 32),
+              SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(child: Skeleton(height: 100, borderRadius: 24)),
+                  SizedBox(width: 16),
+                  Expanded(child: Skeleton(height: 100, borderRadius: 24)),
+                ],
+              ),
+              SizedBox(height: 24),
+              ListSkeleton(itemCount: 3),
+            ],
+          ),
+        ),
+      );
     }
 
     if (_historique == null) {
@@ -96,34 +116,27 @@ class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScr
         children: [
           Row(
             children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: AppColors.slate100,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Center(
-                  child: Text(
-                    ((_historique!.nomClient.isNotEmpty ? _historique!.nomClient[0] : '') + 
-                     (_historique!.prenomClient.isNotEmpty ? _historique!.prenomClient[0] : '')).toUpperCase(),
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 24, color: AppColors.slate400),
-                  ),
-                ),
-
+              ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: _buildAvatar(),
               ),
               const SizedBox(width: 20),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${_historique!.prenomClient} ${_historique!.nomClient}'.toUpperCase(),
+                    Text('${_historique!.client.prenom} ${_historique!.client.nom}'.toUpperCase(),
                         style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.slate800)),
+                    if (_historique!.client.nomJeuneFille != null && _historique!.client.nomJeuneFille!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text('NÉE ${_historique!.client.nomJeuneFille!}'.toUpperCase(),
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 12, color: AppColors.slate500)),
+                    ],
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: AppColors.emerald50, borderRadius: BorderRadius.circular(8)),
-                      child: Text(_historique!.nationalite.toUpperCase(),
+                      child: Text(_historique!.client.nationalite.toUpperCase(),
                           style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 10, color: AppColors.emerald700, letterSpacing: 1)),
                     ),
                   ],
@@ -131,13 +144,28 @@ class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScr
               ),
             ],
           ),
-          const Divider(height: 48, color: AppColors.slate50),
+          const Divider(height: 32, color: AppColors.slate50),
           Row(
             children: [
-              _infoMini(Icons.badge_outlined, 'N° DOCUMENT', _historique!.numeroDocument),
-              _infoMini(Icons.phone_outlined, 'CONTACT', _historique!.contactTelephone),
+              _infoMini(Icons.badge_outlined, 'N° DOCUMENT', _historique!.client.numeroDocument),
+              _infoMini(Icons.phone_outlined, 'CONTACT', _historique!.client.contactTelephone),
             ],
           ),
+          if ((_historique!.client.adresseComplete?.isNotEmpty ?? false) || (_historique!.client.paysDelivranceDoc?.isNotEmpty ?? false)) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                if (_historique!.client.adresseComplete?.isNotEmpty ?? false)
+                  _infoMini(Icons.location_on_outlined, 'ADRESSE', _historique!.client.adresseComplete!)
+                else
+                  const Spacer(),
+                if (_historique!.client.paysDelivranceDoc?.isNotEmpty ?? false)
+                  _infoMini(Icons.public, 'PAYS DÉLIVRANCE', _historique!.client.paysDelivranceDoc!)
+                else
+                  const Spacer(),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -265,7 +293,17 @@ class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScr
                   ],
                 ),
               ),
-              if (s.dateSortie != null)
+              if (isActif && s.dateSortiePrevue != null)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('PRÉVUE', style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: AppColors.emerald600)),
+                      Text(s.formattedDateSortiePrevue, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.emerald700)),
+                    ],
+                  ),
+                ),
+              if (!isActif && s.dateSortie != null)
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -284,8 +322,83 @@ class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScr
               ),
             ],
           ),
+          if ((s.venantDe != null && s.venantDe!.isNotEmpty) || (s.allantA != null && s.allantA!.isNotEmpty) || (s.moyenTransport != null && s.moyenTransport!.isNotEmpty)) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(height: 1, color: AppColors.slate100),
+            ),
+            Row(
+              children: [
+                if (s.venantDe != null && s.venantDe!.isNotEmpty)
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('PROVENANCE', style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: AppColors.slate400)),
+                        Text(s.venantDe!, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.slate700), overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  ),
+                if (s.allantA != null && s.allantA!.isNotEmpty)
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('DESTINATION', style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: AppColors.slate400)),
+                        Text(s.allantA!, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.slate700), overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            if ((s.moyenTransport != null && s.moyenTransport!.isNotEmpty) || (s.numeroImmatriculation != null && s.numeroImmatriculation!.isNotEmpty)) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (s.moyenTransport != null && s.moyenTransport!.isNotEmpty)
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('TRANSPORT', style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: AppColors.slate400)),
+                          Text(s.moyenTransport!, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.slate700), overflow: TextOverflow.ellipsis),
+                        ],
+                      ),
+                    ),
+                  if (s.numeroImmatriculation != null && s.numeroImmatriculation!.isNotEmpty)
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('IMMATRICULATION', style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: AppColors.slate400)),
+                          Text(s.numeroImmatriculation!, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 11, color: AppColors.slate700), overflow: TextOverflow.ellipsis),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildAvatar() {
+    // On cherche le séjour le plus récent ayant une photo
+    final hasPhoto = _historique!.sejours.any((s) => s.photoClient != null && s.photoClient!.isNotEmpty);
+    final s = hasPhoto 
+        ? _historique!.sejours.firstWhere((s) => s.photoClient != null && s.photoClient!.isNotEmpty)
+        : _historique!.sejours.first;
+
+    return DgpnImage(
+      url: s.photoClient,
+      localUuid: s.identifiantUnique,
+      type: DgpnImageType.photo,
+      width: 80,
+      height: 80,
+      fit: BoxFit.cover,
+      placeholderIcon: Icons.person,
     );
   }
 }

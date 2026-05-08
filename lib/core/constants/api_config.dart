@@ -1,5 +1,5 @@
 class ApiConfig {
-  static const String baseUrl = 'http://10.10.25.192:8001/api';
+  static const String baseUrl = 'https://backend-hotel.neywaongo.bf/api';
 
   // Auth
   static const String loginUrl = '/connexion/';
@@ -13,6 +13,7 @@ class ApiConfig {
   static const String enregistrementSejourUrl = '/sejours/enregistrer/';
   static const String clientHistoriqueUrl = '/sejours/historique-clients/';
   static const String nationalitesUrl = '/sejours/nationalites/';
+  static const String paysUrl = '/sejours/pays/';
   // Synchro en masse (offline → serveur)
   static const String sejoursEnMasseUrl = '/sejours/tous/sejourenmasse/';
   static const String sejoursUploadImagesUrl = '/sejours/tous/upload-images/';

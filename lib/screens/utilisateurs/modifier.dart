@@ -5,6 +5,7 @@ import '../../core/services/utilisateur_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/models/user_model.dart';
 import '../../core/widgets/custom_text_field.dart';
+import '../../core/widgets/skeleton.dart';
 
 class UtilisateurModifierScreen extends StatefulWidget {
   final int userId;
@@ -131,7 +132,7 @@ class _UtilisateurModifierScreenState extends State<UtilisateurModifierScreen> {
             style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5, color: AppColors.slate800)),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.emerald600))
+          ? const FormSkeleton()
           : _error != null
               ? _buildError()
               : _buildForm(),
