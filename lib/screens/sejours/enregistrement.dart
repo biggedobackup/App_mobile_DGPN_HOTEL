@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:go_router/go_router.dart';
 import '../../core/widgets/dgpn_image.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/widgets/custom_text_field.dart';
@@ -413,7 +412,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
         if (widget.sejourId != null) {
           Navigator.pop(context, true);
         } else {
-          context.go('/tableau');
+          Navigator.pop(context, true);
         }
       } else {
         _showError(

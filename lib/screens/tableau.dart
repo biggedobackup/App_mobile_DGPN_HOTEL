@@ -451,7 +451,10 @@ class _TableauScreenState extends State<TableauScreen> {
 
   Widget _buildStatCard(_StatItem stat) {
     return InkWell(
-      onTap: () => context.push(stat.route),
+      onTap: () async {
+        await context.push(stat.route);
+        _chargerDonnees();
+      },
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
@@ -608,7 +611,9 @@ class _TableauScreenState extends State<TableauScreen> {
       ),
       onTap: () {
         Navigator.pop(context);
-        if (!selected) context.push(route);
+        if (!selected) {
+          context.push(route).then((_) => _chargerDonnees());
+        }
       },
       selected: selected,
       selectedTileColor: AppColors.emerald50.withValues(alpha: 0.5),
