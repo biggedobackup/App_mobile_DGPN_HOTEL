@@ -222,6 +222,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.4.1"
+  flutter_document_reader_api:
+    dependency: "direct main"
+    description:
+      name: flutter_document_reader_api
+      sha256: "7c20c04ce12ecbd3bdc2cf452bd92fb0d6c3dd0005e6de1c90377bdcdedec2c5"
+      url: "https://pub.dev"
+    source: hosted
+    version: "9.4.1152"
+  flutter_document_reader_core_fullauthrfid:
+    dependency: "direct main"
+    description:
+      name: flutter_document_reader_core_fullauthrfid
+      sha256: "7bab63c0a98d930ba68bc9b8f44c6ed7738d6d38b618bba35c30a24256b49708"
+      url: "https://pub.dev"
+    source: hosted
+    version: "9.4.2203"
   flutter_launcher_icons:
     dependency: "direct dev"
     description:

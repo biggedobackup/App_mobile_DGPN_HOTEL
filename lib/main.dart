@@ -10,6 +10,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:workmanager/workmanager.dart';
 import 'core/services/sync_service.dart';
 import 'core/services/cache_warmup_service.dart';
+import 'core/services/local_ocr_service.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -68,6 +69,9 @@ void main() async {
 
   // Préchauffage immédiat au démarrage (ne bloque pas l'UI)
   CacheWarmupService().warmUp();
+
+  // Initialisation asynchrone du SDK Regula pour l'OCR local
+  LocalOcrService().initialize();
 
   await initializeDateFormatting('fr_FR', null);
   runApp(const DgpnHotelApp());

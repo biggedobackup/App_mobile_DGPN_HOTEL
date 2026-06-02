@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +15,7 @@ import '../../core/widgets/custom_button.dart';
 import '../../core/widgets/section_header.dart';
 import '../../core/widgets/skeleton.dart';
 import '../../core/services/sejour_service.dart';
+import '../../core/services/local_ocr_service.dart';
 import '../../core/utils/ui_utils.dart';
 
 class EnregistrementScreen extends StatefulWidget {
@@ -69,6 +71,9 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   List<String> _paysList = ['Burkina Faso'];
   final ImagePicker _picker = ImagePicker();
 
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  bool? _scanServiceReady;
+
   @override
   void initState() {
     super.initState();
@@ -77,7 +82,69 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
     if (widget.sejourId != null) {
       _chargerSejourExistant();
     }
+    _checkScanStatus();
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
+      _checkScanStatus();
+    });
   }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    _nomCtrl.dispose();
+    _prenomCtrl.dispose();
+    _dateNaissCtrl.dispose();
+    _lieuNaissCtrl.dispose();
+    _professionCtrl.dispose();
+    _lieuResCtrl.dispose();
+    _telephoneCtrl.dispose();
+    _numDocCtrl.dispose();
+    _chambreCtrl.dispose();
+    _dateEntreeCtrl.dispose();
+    _dateSortiePrevueCtrl.dispose();
+    _nomJeuneFilleCtrl.dispose();
+    _adresseCompleteCtrl.dispose();
+    _dateDelivranceDocCtrl.dispose();
+    _venantDeCtrl.dispose();
+    _allantACtrl.dispose();
+    _immatriculationCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkScanStatus() async {
+    try {
+      final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
+      final bool isOffline = connectivityResult.contains(ConnectivityResult.none);
+      
+      bool ready = false;
+      if (isOffline) {
+        // Mode hors ligne : vérifier si le SDK local est initialisé
+        final localOcr = LocalOcrService();
+        if (localOcr.isInitialized) {
+          ready = true;
+        } else {
+          ready = await localOcr.initialize();
+        }
+      } else {
+        // Mode en ligne : vérifier la santé de l'API/serveur
+        ready = await _sejourService.checkApiHealth();
+      }
+      
+      if (mounted) {
+        setState(() {
+          _scanServiceReady = ready;
+        });
+      }
+    } catch (e) {
+      debugPrint("[EnregistrementScreen] Erreur lors de la vérification du statut : $e");
+      if (mounted) {
+        setState(() {
+          _scanServiceReady = false;
+        });
+      }
+    }
+  }
+
 
   Future<void> _chargerSejourExistant() async {
     setState(() => _loading = true);
@@ -211,6 +278,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   Future<void> _lancerScan() async {
     if (_docRecto == null) return;
 
+    debugPrint("[EnregistrementScreen] _lancerScan lancé...");
     if (mounted) {
       setState(() => _scanning = true);
     }
@@ -218,48 +286,72 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
     // --- Vérification de la connexion ---
     final List<ConnectivityResult> connectivityResult = await Connectivity()
         .checkConnectivity();
-    if (connectivityResult.contains(ConnectivityResult.none)) {
-      // Hors-ligne : on arrête ici silencieusement
-      if (mounted) {
-        setState(() => _scanning = false);
+    final bool isOffline = connectivityResult.contains(ConnectivityResult.none);
+    debugPrint("[EnregistrementScreen] Statut de connexion : ${isOffline ? 'HORS-LIGNE' : 'EN LIGNE'}");
+
+    Map<String, dynamic>? result;
+
+    if (isOffline) {
+      debugPrint("[EnregistrementScreen] Lancement du scan en mode hors-ligne avec LocalOcrService...");
+      final localOcr = LocalOcrService();
+      try {
+        result = await localOcr.scanLocalDocument(
+          recto: _docRecto!,
+          verso: _docVerso,
+        );
+      } finally {
+        localOcr.dispose();
       }
-      return;
+    } else {
+      debugPrint("[EnregistrementScreen] Lancement du scan en mode en ligne avec SejourService...");
+      result = await _sejourService.scanDocument(
+        recto: _docRecto!,
+        verso: _docVerso,
+      );
     }
 
-    final result = await _sejourService.scanDocument(
-      recto: _docRecto!,
-      verso: _docVerso,
-    );
+    debugPrint("[EnregistrementScreen] Résultat du scan reçu : $result");
 
     if (result != null && result['success'] == true && mounted) {
       final champs = result['champs'] as Map<String, dynamic>;
+      debugPrint("[EnregistrementScreen] Extraction réussie. Remplissage des champs...");
       setState(() {
-        if (champs['Nom'] != null) _nomCtrl.text = champs['Nom'].toString();
-        if (champs['Prénoms'] != null) {
-          _prenomCtrl.text = champs['Prénoms'].toString();
+        // Helper function to update controller if it's currently empty and scanned value is not empty
+        void updateIfEmpty(TextEditingController ctrl, String? newValue) {
+          if (newValue != null && newValue.trim().isNotEmpty && ctrl.text.trim().isEmpty) {
+            ctrl.text = newValue.trim();
+          }
         }
-        if (champs['Date de naissance'] != null) {
-          _dateNaissCtrl.text = champs['Date de naissance'].toString();
-        }
-        if (champs['Lieu de naissance'] != null) {
-          _lieuNaissCtrl.text = champs['Lieu de naissance'].toString();
-        }
-        if (champs['Profession'] != null) {
-          _professionCtrl.text = champs['Profession'].toString();
-        }
-        if (champs['Numéro du document'] != null) {
-          _numDocCtrl.text = champs['Numéro du document'].toString();
-        }
-        if (champs['Nationalité'] != null) {
-          final natRaw = champs['Nationalité'].toString();
+
+        updateIfEmpty(_nomCtrl, champs['Nom']?.toString());
+        updateIfEmpty(_prenomCtrl, champs['Prénoms']?.toString());
+        updateIfEmpty(_dateNaissCtrl, champs['Date de naissance']?.toString());
+        updateIfEmpty(_lieuNaissCtrl, champs['Lieu de naissance']?.toString());
+        updateIfEmpty(_professionCtrl, champs['Profession']?.toString());
+        updateIfEmpty(_numDocCtrl, champs['Numéro du document']?.toString());
+        updateIfEmpty(_lieuResCtrl, champs['Pays de résidence']?.toString());
+
+        // Nom de jeune fille
+        final stringNomJeuneFille = champs['Nom de jeune fille']?.toString() ?? champs['nom_jeune_fille']?.toString();
+        updateIfEmpty(_nomJeuneFilleCtrl, stringNomJeuneFille);
+
+        // Date de délivrance
+        final stringDateDelivrance = champs['Date de délivrance']?.toString() ?? champs['date_delivrance_doc']?.toString();
+        updateIfEmpty(_dateDelivranceDocCtrl, stringDateDelivrance);
+
+        // Nationalité
+        if (champs['Nationalité'] != null && champs['Nationalité'].toString().trim().isNotEmpty) {
+          final natRaw = champs['Nationalité'].toString().trim();
           // Tenter de trouver le match exact dans la liste (insensible à la casse)
           final found = _nationalites.firstWhere(
             (n) => n.toUpperCase() == natRaw.toUpperCase(),
-            orElse: () => _nationalites.first,
+            orElse: () => _nationalite, // Keep current nationality instead of resetting
           );
           _nationalite = found;
         }
-        if (champs['Type de document'] != null) {
+
+        // Type de document
+        if (champs['Type de document'] != null && champs['Type de document'].toString().trim().isNotEmpty) {
           final t = champs['Type de document'].toString().toUpperCase();
           if (t.contains('PASSPORT') || t.contains('PASSEPORT')) {
             _typeDoc = 'PASSEPORT';
@@ -269,14 +361,22 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
             _typeDoc = 'CNI';
           }
         }
-        if (champs['Pays de résidence'] != null) {
-          _lieuResCtrl.text = champs['Pays de résidence'].toString();
+
+        // Pays de délivrance
+        final paysRaw = champs['Pays de délivrance']?.toString() ?? champs['pays_delivrance_doc']?.toString();
+        if (paysRaw != null && paysRaw.trim().isNotEmpty) {
+          final found = _paysList.firstWhere(
+            (p) => p.toUpperCase() == paysRaw.trim().toUpperCase(),
+            orElse: () => _paysDelivrance, // Keep current issuing country instead of resetting
+          );
+          _paysDelivrance = found;
         }
       });
 
       // --- Récupération automatique du portrait ---
       if (result['portrait'] != null && _photoClient == null) {
         try {
+          debugPrint("[EnregistrementScreen] Portrait trouvé dans les résultats, extraction...");
           final String portraitB64 = result['portrait'];
           final bytes = base64Decode(portraitB64);
           final tempDir = await getTemporaryDirectory();
@@ -287,6 +387,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
             setState(() {
               _photoClient = portraitFile;
             });
+            debugPrint("[EnregistrementScreen] Portrait extrait et affecté avec succès : ${portraitFile.path}");
           }
         } catch (e) {
           debugPrint("Erreur lors de la récupération du portrait : $e");
@@ -295,9 +396,25 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Données du document extraites avec succès'),
+          SnackBar(
+            content: Text(isOffline
+                ? 'Données du document extraites avec succès (Mode hors-ligne)'
+                : 'Données du document extraites avec succès'),
             backgroundColor: AppColors.emerald600,
+          ),
+        );
+      }
+    } else {
+      debugPrint("[EnregistrementScreen] Échec ou résultat vide de l'analyse.");
+      if (mounted) {
+        String msg = "Échec de l'analyse du document.";
+        if (result != null && result['error'] == 'license_missing') {
+          msg = result['message'] ?? "Licence Regula absente. Veuillez ajouter 'regula.license' dans le dossier assets/.";
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: Colors.redAccent,
           ),
         );
       }
@@ -428,6 +545,57 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
     UIUtils.showErrorBanner(context, msg);
   }
 
+  Widget _buildStatusIndicator() {
+    Color color;
+    String label;
+    if (_scanServiceReady == null) {
+      color = AppColors.warning;
+      label = 'Vérification...';
+    } else if (_scanServiceReady == true) {
+      color = const Color.fromARGB(255, 254, 255, 255);
+      label = 'Scan actif';
+    } else {
+      color = AppColors.error;
+      label = 'Scan inactif';
+    }
+
+    return Tooltip(
+      message: label,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 20.0),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.6),
+                    blurRadius: 6,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -441,6 +609,9 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
             letterSpacing: 2,
           ),
         ),
+        actions: [
+          _buildStatusIndicator(),
+        ],
       ),
       body: _loading && widget.sejourId != null
           ? const FormSkeleton()

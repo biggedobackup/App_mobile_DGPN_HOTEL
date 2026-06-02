@@ -796,4 +796,26 @@ class SejourService {
       return false;
     }
   }
+
+  /// Vérifie si l'API en ligne / serveur est accessible et répond normalement.
+  Future<bool> checkApiHealth() async {
+    try {
+      final token = await _getToken();
+      final uri = Uri.parse('$_baseUrl${ApiConfig.nationalitesUrl}');
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 3));
+      
+      // Si on reçoit une réponse valide (inférieure à 500), le serveur est vivant
+      return response.statusCode < 500;
+    } catch (e) {
+      return false;
+    }
+  }
 }
+
