@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/sejours/splash_screen.dart';
 import '../screens/connexion.dart';
 import '../screens/tableau.dart';
+import '../screens/sejours/scan.dart';
 import '../screens/sejours/enregistrement.dart';
 import '../screens/sejours/sejours_actifs.dart';
 import '../screens/sejours/sejour_terminer.dart';
@@ -28,7 +29,7 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/enregistrement',
-      builder: (context, state) => const EnregistrementScreen(),
+      builder: (context, state) => const ScanScreen(),
     ),
     GoRoute(
       path: '/enregistrement/:id/modifier',
@@ -41,7 +42,8 @@ final GoRouter appRouter = GoRouter(
       path: '/enregistrement/:id/detail',
       builder: (context, state) {
         final id = int.parse(state.pathParameters['id']!);
-        return SejourDetailScreen(sejourId: id);
+        final scrollToCheckout = state.extra == true;
+        return SejourDetailScreen(sejourId: id, scrollToCheckout: scrollToCheckout);
       },
     ),
     GoRoute(

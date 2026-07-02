@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/sejour_model.dart';
 import '../../core/services/sejour_service.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/models/user_model.dart';
 import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/dgpn_image.dart';
 
@@ -22,6 +24,8 @@ class ClientHistoriqueDetailScreen extends StatefulWidget {
 
 class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScreen> {
   final _sejourService = SejourService();
+  final _authService = AuthService();
+  UserModel? _user;
   ClientHistoriqueModel? _historique;
   bool _loading = true;
 
@@ -33,9 +37,11 @@ class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScr
 
   Future<void> _charger() async {
     setState(() => _loading = true);
+    final user = await _authService.getCurrentUser();
     final h = await _sejourService.getClientHistoriqueById(widget.clientId);
     if (mounted) {
       setState(() {
+        _user = user;
         _historique = h;
         _loading = false;
       });
@@ -105,6 +111,8 @@ class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScr
   }
 
   Widget _buildProfileHeader() {
+    final String? role = _user?.role;
+    final bool restrictMedia = role == 'AGENT_ACCUEIL' || role == 'GERANT_HOTEL';
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -116,11 +124,13 @@ class _ClientHistoriqueDetailScreenState extends State<ClientHistoriqueDetailScr
         children: [
           Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: _buildAvatar(),
-              ),
-              const SizedBox(width: 20),
+              if (!restrictMedia) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: _buildAvatar(),
+                ),
+                const SizedBox(width: 20),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

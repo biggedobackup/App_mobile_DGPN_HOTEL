@@ -185,9 +185,9 @@ class _TableauScreenState extends State<TableauScreen> {
       ),
     ];
 
-    // Agent : enregistrement + sorties + actifs
+    // Agent : enregistrement + actifs
     if (_user?.role == 'AGENT_ACCUEIL') {
-      return all.where((s) => ['enregistrement', 'sorties', 'actifs'].contains(s.id)).toList();
+      return all.where((s) => ['enregistrement', 'actifs'].contains(s.id)).toList();
     }
     // Gérant : tout sauf si non pertinent
     if (isGerant) {
@@ -523,6 +523,7 @@ class _TableauScreenState extends State<TableauScreen> {
   // ── Drawer ─────────────────────────────────────────────────────────────
   Widget _buildDrawer() {
     final bool isGerant = _user?.role == 'GERANT_HOTEL';
+    final bool isAgent = _user?.role == 'AGENT_ACCUEIL';
 
     return Drawer(
       child: Column(
@@ -552,8 +553,10 @@ class _TableauScreenState extends State<TableauScreen> {
           _drawerItem(Icons.dashboard_outlined, 'Tableau de Bord', '/tableau', true),
           _drawerItem(Icons.person_add_outlined, 'Enregistrer séjour', '/enregistrement', false),
           _drawerItem(Icons.hotel_outlined, 'Séjours en cours', '/sejours-actifs', false),
-          _drawerItem(Icons.check_circle_outline, 'Sorties prévues', '/sejour-terminer', false),
-          _drawerItem(Icons.history_outlined, 'Historique des séjours', '/historique-sejours', false),
+          if (!isAgent)
+            _drawerItem(Icons.check_circle_outline, 'Sorties prévues', '/sejour-terminer', false),
+          if (!isAgent)
+            _drawerItem(Icons.history_outlined, 'Historique des séjours', '/historique-sejours', false),
           if (isGerant)
             _drawerItem(Icons.people_outline, 'Gestion des Utilisateurs', '/utilisateurs', false),
           const Spacer(),

@@ -38,12 +38,15 @@ class UserModel {
   factory UserModel.fromJson(Map<String, dynamic> json) {
     // Sécurité pour le champ hotel qui peut être un ID ou un objet
     int? finalHotelId;
+    String? finalHotelNom;
     final hotelData = json['hotel'];
     if (hotelData is int) {
       finalHotelId = hotelData;
-    } else if (hotelData is Map && hotelData.containsKey('id')) {
+    } else if (hotelData is Map) {
       finalHotelId = hotelData['id'];
+      finalHotelNom = hotelData['denomination'] ?? hotelData['nom'];
     }
+    finalHotelNom ??= json['hotel_nom'];
 
     return UserModel(
       id: json['id'],
@@ -53,7 +56,7 @@ class UserModel {
       role: json['role'] ?? '',
       roleDisplay: json['role_display'],
       hotelId: finalHotelId,
-      hotelNom: json['hotel_nom'],
+      hotelNom: finalHotelNom,
       regionNom: json['region_nom'],
       provinceNom: json['province_nom'],
       communeNom: json['commune_nom'],

@@ -35,10 +35,20 @@ class AuthService {
         await prefs.setString('access_token', data['access'] ?? '');
         await prefs.setString('refresh_token', data['refresh'] ?? '');
         await prefs.setString('user_role', role);
-        await prefs.setString(
-          'user_hotel_id',
-          data['user']?['hotel_id']?.toString() ?? '',
-        );
+
+        // Extraire l'hôtel (peut être un ID ou un objet)
+        final userHotel = data['user']?['hotel'];
+        String hotelId = '';
+        String hotelNom = '';
+        if (userHotel is Map) {
+          hotelId = userHotel['id']?.toString() ?? '';
+          hotelNom = userHotel['denomination'] ?? userHotel['nom'] ?? '';
+        } else {
+          hotelId = userHotel?.toString() ?? data['user']?['hotel_id']?.toString() ?? '';
+        }
+        await prefs.setString('user_hotel_id', hotelId);
+        await prefs.setString('user_hotel_nom', hotelNom);
+
         await prefs.setString(
           'user_nom',
           '${data['user']?['prenom'] ?? ''} ${data['user']?['nom'] ?? ''}',
@@ -63,6 +73,7 @@ class AuthService {
     await prefs.remove('refresh_token');
     await prefs.remove('user_role');
     await prefs.remove('user_hotel_id');
+    await prefs.remove('user_hotel_nom');
     await prefs.remove('user_nom');
     await prefs.remove('user_email');
     
@@ -122,6 +133,7 @@ class AuthService {
       final email = prefs.getString('user_email') ?? '';
       final hotelIdStr = prefs.getString('user_hotel_id') ?? '';
       final hotelId = int.tryParse(hotelIdStr);
+      final hotelNom = prefs.getString('user_hotel_nom') ?? '';
 
       final noms = nom.split(' ');
       final prenom = noms.isNotEmpty ? noms[0] : '';
@@ -133,6 +145,7 @@ class AuthService {
         email: email,
         role: role,
         hotelId: hotelId,
+        hotelNom: hotelNom,
       );
     } catch (_) {
       return null;

@@ -8,6 +8,9 @@ class ClientModel {
   final String lieuNaissance;
   final String nationalite;
   final String profession;
+  final String? sexe;            // 'HOMME' | 'FEMME' | null
+  final String? paysResidence;   // pays_residence
+  final String? villeResidence;  // ville_residence
   final String lieuResidence;
   final String contactTelephone;
   final String typeDocument;
@@ -30,6 +33,9 @@ class ClientModel {
     required this.lieuNaissance,
     required this.nationalite,
     required this.profession,
+    this.sexe,
+    this.paysResidence,
+    this.villeResidence,
     required this.lieuResidence,
     required this.contactTelephone,
     required this.typeDocument,
@@ -54,6 +60,9 @@ class ClientModel {
       lieuNaissance: json['lieu_naissance'] ?? '',
       nationalite: json['nationalite'] ?? '',
       profession: json['profession'] ?? '',
+      sexe: json['sexe'],
+      paysResidence: json['pays_residence'],
+      villeResidence: json['ville_residence'],
       lieuResidence: json['lieu_residence'] ?? '',
       contactTelephone: json['contact_telephone'] ?? '',
       typeDocument: json['type_document'] ?? '',
@@ -79,6 +88,9 @@ class ClientModel {
       'lieu_naissance': lieuNaissance,
       'nationalite': nationalite,
       'profession': profession,
+      'sexe': sexe,
+      'pays_residence': paysResidence,
+      'ville_residence': villeResidence,
       'lieu_residence': lieuResidence,
       'contact_telephone': contactTelephone,
       'type_document': typeDocument,
@@ -175,6 +187,9 @@ class SejourModel {
               typeDocument: json['type_document'] ?? '',
               numeroDocument: json['numero_document'] ?? '',
               contactTelephone: json['contact_telephone'] ?? '',
+              sexe: json['sexe'],
+              paysResidence: json['pays_residence'],
+              villeResidence: json['ville_residence'],
               nomJeuneFille: json['nom_jeune_fille'],
               adresseComplete: json['adresse_complete'],
               dateDelivranceDoc: json['date_delivrance_doc'],
@@ -216,6 +231,9 @@ class SejourModel {
         lieuResidence: fields['lieu_residence'] ?? '',
         profession: fields['profession'] ?? '',
         nationalite: fields['nationalite'] ?? '',
+        sexe: fields['sexe'],
+        paysResidence: fields['pays_residence'],
+        villeResidence: fields['ville_residence'],
         typeDocument: fields['type_document'] ?? '',
         numeroDocument: fields['numero_document'] ?? '',
         contactTelephone: fields['contact_telephone'] ?? '',

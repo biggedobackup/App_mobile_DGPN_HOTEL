@@ -340,11 +340,13 @@ class SejourService {
 
       final response = await request.send();
       final respBody = await response.stream.bytesToString();
+      // ignore: avoid_print
       print("RESPONSE BODY: $respBody");
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         return true;
       } else {
+        // ignore: avoid_print
         print("API ERROR ${response.statusCode}: falling back to offline");
         // Erreur API (pas forcément réseau) -> on tente quand même la sauvegarde locale pour ne pas perdre la donnée
         if (!fromSync) {
@@ -786,6 +788,7 @@ class SejourService {
       );
       if (streamedResponse.statusCode != 200) {
         final respStr = await streamedResponse.stream.bytesToString();
+        // ignore: avoid_print
         print("UPLOAD IMAGES ERROR ${streamedResponse.statusCode}: $respStr");
         return false;
       }

@@ -5,10 +5,10 @@ import '../../core/widgets/skeleton.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/sejour_service.dart';
 import '../../core/models/sejour_model.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/models/user_model.dart';
 import '../../core/widgets/custom_text_field.dart';
-import '../../core/widgets/custom_button.dart';
 import '../../core/utils/debouncer.dart';
-import '../../core/utils/ui_utils.dart';
 import '../../core/widgets/dgpn_image.dart';
 
 
@@ -21,6 +21,8 @@ class SejoursActifsScreen extends StatefulWidget {
 
 class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
   final _sejourService = SejourService();
+  final _authService = AuthService();
+  UserModel? _user;
   final _searchCtrl = TextEditingController();
   final _debouncer = Debouncer(milliseconds: 500);
   final _scrollController = ScrollController();
@@ -71,6 +73,7 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
       _sejours = [];
     });
     
+    final user = await _authService.getCurrentUser();
     final data = await _sejourService.getSejoursActifs(
       page: _currentPage,
       search: _searchCtrl.text,
@@ -80,6 +83,7 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
     
     if (mounted) {
       setState(() {
+        _user = user;
         _sejours = List<SejourModel>.from(data['results'] ?? []);
 
         _totalCount = data['count'] as int;
@@ -136,106 +140,6 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
       });
       _charger();
     }
-  }
-
-  void _showSortieModal(SejourModel s) {
-    final obsController = TextEditingController(text: s.observationsSortie);
-    bool saving = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Container(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 12),
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.slate200,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'ENREGISTRER LA SORTIE',
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Client: ${s.clientFullName.toUpperCase()}',
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11,
-                        color: AppColors.slate500,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    CustomTextField(
-                      label: 'OBSERVATIONS DE SORTIE',
-                      controller: obsController,
-                      maxLines: 3,
-                      prefixIcon: Icons.notes,
-                    ),
-                    const SizedBox(height: 24),
-                    CustomButton(
-                      label: 'VALIDER LA SORTIE',
-                      color: AppColors.error,
-                      isLoading: saving,
-                      onPressed: () async {
-                        setModalState(() => saving = true);
-                        final success = await _sejourService.enregistrerSortie(
-                          s.id!,
-                          DateTime.now().toIso8601String(),
-                          obsController.text,
-                        );
-                        if (!context.mounted) return;
-                        setModalState(() => saving = false);
-                        if (success) {
-                          Navigator.pop(context);
-                          if (mounted) _charger();
-                          if (context.mounted) {
-                            UIUtils.showSuccessBanner(context, 'Sortie enregistrée');
-                          }
-                        } else {
-                          if (context.mounted) {
-                            UIUtils.showErrorBanner(context, 'Échec de l\'enregistrement de la sortie');
-                          }
-                        }
-
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   @override
@@ -430,6 +334,8 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
   }
 
   Widget _buildSejourCard(SejourModel s) {
+    final String? role = _user?.role;
+    final bool restrictMedia = role == 'AGENT_ACCUEIL' || role == 'GERANT_HOTEL';
     return InkWell(
       onTap: s.isOffline
           ? null
@@ -454,18 +360,20 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: DgpnImage(
-                      url: s.photoClient,
-                      localUuid: s.identifiantUnique,
-                      type: DgpnImageType.photo,
-                      width: 40,
-                      height: 40,
-                      placeholderIcon: Icons.person,
+                  if (!restrictMedia) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: DgpnImage(
+                        url: s.photoClient,
+                        localUuid: s.identifiantUnique,
+                        type: DgpnImageType.photo,
+                        width: 40,
+                        height: 40,
+                        placeholderIcon: Icons.person,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
+                    const SizedBox(width: 12),
+                  ],
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -560,7 +468,7 @@ class _SejoursActifsScreenState extends State<SejoursActifsScreen> {
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
-                    onPressed: s.isOffline ? null : () => _showSortieModal(s),
+                    onPressed: s.isOffline ? null : () => context.push('/enregistrement/${s.id}/detail', extra: true).then((_) => _charger()),
                     icon: const Icon(Icons.logout, size: 12),
                     label: const Text('SORTIE'),
                     style: ElevatedButton.styleFrom(

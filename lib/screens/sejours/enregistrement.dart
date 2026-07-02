@@ -15,12 +15,17 @@ import '../../core/widgets/custom_button.dart';
 import '../../core/widgets/section_header.dart';
 import '../../core/widgets/skeleton.dart';
 import '../../core/services/sejour_service.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/utilisateur_service.dart';
+import '../../core/models/user_model.dart';
 import '../../core/services/local_ocr_service.dart';
 import '../../core/utils/ui_utils.dart';
+import '../../core/models/scan_result_data.dart';
 
 class EnregistrementScreen extends StatefulWidget {
   final String? sejourId;
-  const EnregistrementScreen({super.key, this.sejourId});
+  final ScanResultData? scanData;
+  const EnregistrementScreen({super.key, this.sejourId, this.scanData});
   @override
   State<EnregistrementScreen> createState() => _EnregistrementScreenState();
 }
@@ -28,6 +33,9 @@ class EnregistrementScreen extends StatefulWidget {
 class _EnregistrementScreenState extends State<EnregistrementScreen> {
   final _formKey = GlobalKey<FormState>();
   final _sejourService = SejourService();
+  final _authService = AuthService();
+  final _userService = UtilisateurService();
+  UserModel? _user;
   bool _loading = false;
   bool _scanning = false;
 
@@ -37,7 +45,6 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   final _dateNaissCtrl = TextEditingController();
   final _lieuNaissCtrl = TextEditingController();
   final _professionCtrl = TextEditingController();
-  final _lieuResCtrl = TextEditingController();
   final _telephoneCtrl = TextEditingController();
   final _numDocCtrl = TextEditingController();
   final _chambreCtrl = TextEditingController();
@@ -45,13 +52,16 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   final _dateSortiePrevueCtrl = TextEditingController();
 
   final _nomJeuneFilleCtrl = TextEditingController();
-  final _adresseCompleteCtrl = TextEditingController();
   final _dateDelivranceDocCtrl = TextEditingController();
   final _venantDeCtrl = TextEditingController();
   final _allantACtrl = TextEditingController();
   final _immatriculationCtrl = TextEditingController();
+  final _villeResCtrl = TextEditingController();
+  final _hotelCtrl = TextEditingController();
 
   String _nationalite = 'Burkinabè';
+  String _sexe = 'HOMME';
+  String _paysResidence = 'Burkina Faso';
   String _typeDoc = 'CNI';
   String _motifSejour = 'AFFAIRES';
   String _moyenTransport = 'AUTRE';
@@ -78,13 +88,66 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   void initState() {
     super.initState();
     _dateEntreeCtrl.text = DateTime.now().toString().substring(0, 16);
-    _chargerDonnees();
+    _initFormState();
+  }
+
+  Future<void> _initFormState() async {
+    await _chargerDonnees();
     if (widget.sejourId != null) {
-      _chargerSejourExistant();
+      await _chargerSejourExistant();
+    } else if (widget.scanData != null) {
+      _prefillFromScanData();
     }
     _checkScanStatus();
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
       _checkScanStatus();
+    });
+  }
+
+  void _prefillFromScanData() {
+    final d = widget.scanData!;
+    setState(() {
+      if (d.nom != null) _nomCtrl.text = d.nom!;
+      if (d.prenom != null) _prenomCtrl.text = d.prenom!;
+      if (d.dateNaissance != null) _dateNaissCtrl.text = d.dateNaissance!;
+      if (d.lieuNaissance != null) _lieuNaissCtrl.text = d.lieuNaissance!;
+      if (d.profession != null) _professionCtrl.text = d.profession!;
+      if (d.numeroDocument != null) _numDocCtrl.text = d.numeroDocument!;
+      if (d.nationalite != null && d.nationalite!.trim().isNotEmpty) {
+        final natRaw = d.nationalite!.trim();
+        final found = _nationalites.firstWhere(
+          (n) => n.toUpperCase() == natRaw.toUpperCase(),
+          orElse: () {
+            _nationalites.add(natRaw);
+            return natRaw;
+          },
+        );
+        _nationalite = found;
+      }
+      if (d.typeDocument != null && d.typeDocument!.trim().isNotEmpty) {
+        final t = d.typeDocument!.trim().toUpperCase();
+        if (t.contains('PASSPORT') || t.contains('PASSEPORT')) {
+          _typeDoc = 'PASSEPORT';
+        } else if (t.contains('CNI') || t.contains('ID') || t.contains('CARD')) {
+          _typeDoc = 'CNI';
+        }
+      }
+      if (d.paysDelivrance != null && d.paysDelivrance!.trim().isNotEmpty) {
+        final paysRaw = d.paysDelivrance!.trim();
+        final found = _paysList.firstWhere(
+          (p) => p.toUpperCase() == paysRaw.toUpperCase(),
+          orElse: () {
+            _paysList.add(paysRaw);
+            return paysRaw;
+          },
+        );
+        _paysDelivrance = found;
+      }
+      if (d.dateDelivrance != null) _dateDelivranceDocCtrl.text = d.dateDelivrance!;
+      if (d.nomJeuneFille != null) _nomJeuneFilleCtrl.text = d.nomJeuneFille!;
+      if (d.rectoImage != null) _docRecto = d.rectoImage;
+      if (d.versoImage != null) _docVerso = d.versoImage;
+      if (d.portrait != null) _photoClient = d.portrait;
     });
   }
 
@@ -96,38 +159,27 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
     _dateNaissCtrl.dispose();
     _lieuNaissCtrl.dispose();
     _professionCtrl.dispose();
-    _lieuResCtrl.dispose();
     _telephoneCtrl.dispose();
     _numDocCtrl.dispose();
     _chambreCtrl.dispose();
     _dateEntreeCtrl.dispose();
     _dateSortiePrevueCtrl.dispose();
     _nomJeuneFilleCtrl.dispose();
-    _adresseCompleteCtrl.dispose();
     _dateDelivranceDocCtrl.dispose();
     _venantDeCtrl.dispose();
     _allantACtrl.dispose();
     _immatriculationCtrl.dispose();
+    _villeResCtrl.dispose();
+    _hotelCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _checkScanStatus() async {
     try {
-      final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
-      final bool isOffline = connectivityResult.contains(ConnectivityResult.none);
-      
-      bool ready = false;
-      if (isOffline) {
-        // Mode hors ligne : vérifier si le SDK local est initialisé
-        final localOcr = LocalOcrService();
-        if (localOcr.isInitialized) {
-          ready = true;
-        } else {
-          ready = await localOcr.initialize();
-        }
-      } else {
-        // Mode en ligne : vérifier la santé de l'API/serveur
-        ready = await _sejourService.checkApiHealth();
+      final localOcr = LocalOcrService();
+      bool ready = localOcr.isInitialized;
+      if (!ready) {
+        ready = await localOcr.initialize();
       }
       
       if (mounted) {
@@ -136,7 +188,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
         });
       }
     } catch (e) {
-      debugPrint("[EnregistrementScreen] Erreur lors de la vérification du statut : $e");
+      debugPrint("[EnregistrementScreen] Erreur lors de la vérification du statut local : $e");
       if (mounted) {
         setState(() {
           _scanServiceReady = false;
@@ -158,14 +210,15 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
           _dateNaissCtrl.text = s.dateNaissance;
           _lieuNaissCtrl.text = s.lieuNaissance;
           _professionCtrl.text = s.profession;
-          _lieuResCtrl.text = s.lieuResidence;
           _telephoneCtrl.text = s.contactTelephone;
           _numDocCtrl.text = s.numeroDocument;
           _chambreCtrl.text = s.numeroChambre;
           _nomJeuneFilleCtrl.text = s.client.nomJeuneFille ?? '';
-          _adresseCompleteCtrl.text = s.client.adresseComplete ?? '';
           _dateDelivranceDocCtrl.text = s.client.dateDelivranceDoc ?? '';
           _paysDelivrance = s.client.paysDelivranceDoc ?? 'Burkina Faso';
+          _sexe = s.client.sexe ?? 'HOMME';
+          _paysResidence = s.client.paysResidence ?? 'Burkina Faso';
+          _villeResCtrl.text = s.client.villeResidence ?? '';
           _venantDeCtrl.text = s.venantDe ?? '';
           _allantACtrl.text = s.allantA ?? '';
           _immatriculationCtrl.text = s.numeroImmatriculation ?? '';
@@ -205,8 +258,21 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
 
   Future<void> _chargerDonnees() async {
     final prefs = await SharedPreferences.getInstance();
+    UserModel? user = await _authService.getCurrentUser();
+
+    // Si le nom de l'hôtel n'est pas en cache, le récupérer depuis l'API
+    if (user != null && (user.hotelNom == null || user.hotelNom!.isEmpty)) {
+      final profile = await _userService.getProfil();
+      if (profile != null && profile.hotelNom != null && profile.hotelNom!.isNotEmpty) {
+        user = profile;
+        await prefs.setString('user_hotel_nom', profile.hotelNom!);
+      }
+    }
+
     setState(() {
+      _user = user;
       _hotelId = prefs.getString('user_hotel_id') ?? '';
+      _hotelCtrl.text = user?.hotelNom ?? 'Hôtel #$_hotelId';
     });
 
     final nats = await _sejourService.getNationalites();
@@ -278,36 +344,21 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   Future<void> _lancerScan() async {
     if (_docRecto == null) return;
 
-    debugPrint("[EnregistrementScreen] _lancerScan lancé...");
+    debugPrint("[EnregistrementScreen] _lancerScan lancé (Mode Local uniquement)...");
     if (mounted) {
       setState(() => _scanning = true);
     }
 
-    // --- Vérification de la connexion ---
-    final List<ConnectivityResult> connectivityResult = await Connectivity()
-        .checkConnectivity();
-    final bool isOffline = connectivityResult.contains(ConnectivityResult.none);
-    debugPrint("[EnregistrementScreen] Statut de connexion : ${isOffline ? 'HORS-LIGNE' : 'EN LIGNE'}");
-
     Map<String, dynamic>? result;
 
-    if (isOffline) {
-      debugPrint("[EnregistrementScreen] Lancement du scan en mode hors-ligne avec LocalOcrService...");
-      final localOcr = LocalOcrService();
-      try {
-        result = await localOcr.scanLocalDocument(
-          recto: _docRecto!,
-          verso: _docVerso,
-        );
-      } finally {
-        localOcr.dispose();
-      }
-    } else {
-      debugPrint("[EnregistrementScreen] Lancement du scan en mode en ligne avec SejourService...");
-      result = await _sejourService.scanDocument(
+    final localOcr = LocalOcrService();
+    try {
+      result = await localOcr.scanLocalDocument(
         recto: _docRecto!,
         verso: _docVerso,
       );
+    } finally {
+      localOcr.dispose();
     }
 
     debugPrint("[EnregistrementScreen] Résultat du scan reçu : $result");
@@ -329,7 +380,29 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
         updateIfEmpty(_lieuNaissCtrl, champs['Lieu de naissance']?.toString());
         updateIfEmpty(_professionCtrl, champs['Profession']?.toString());
         updateIfEmpty(_numDocCtrl, champs['Numéro du document']?.toString());
-        updateIfEmpty(_lieuResCtrl, champs['Pays de résidence']?.toString());
+
+        // Pays de résidence
+        if (champs['Pays de résidence'] != null && champs['Pays de résidence'].toString().trim().isNotEmpty) {
+          final paysRaw = champs['Pays de résidence'].toString().trim();
+          final found = _paysList.firstWhere(
+            (p) => p.toUpperCase() == paysRaw.toUpperCase(),
+            orElse: () => _paysResidence,
+          );
+          _paysResidence = found;
+        }
+
+        // Ville de résidence
+        updateIfEmpty(_villeResCtrl, champs['Ville de résidence']?.toString());
+
+        // Sexe
+        if (champs['Sexe'] != null) {
+          final s = champs['Sexe'].toString().toUpperCase();
+          if (s == 'FEMME' || s == 'F') {
+            _sexe = 'FEMME';
+          } else if (s == 'HOMME' || s == 'M') {
+            _sexe = 'HOMME';
+          }
+        }
 
         // Nom de jeune fille
         final stringNomJeuneFille = champs['Nom de jeune fille']?.toString() ?? champs['nom_jeune_fille']?.toString();
@@ -396,10 +469,8 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isOffline
-                ? 'Données du document extraites avec succès (Mode hors-ligne)'
-                : 'Données du document extraites avec succès'),
+          const SnackBar(
+            content: Text('Données du document extraites avec succès (Mode local)'),
             backgroundColor: AppColors.emerald600,
           ),
         );
@@ -469,13 +540,14 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
       'nationalite': _nationalite,
       'profession': _professionCtrl.text.trim(),
       'contact_telephone': _telephoneCtrl.text.trim(),
-      'lieu_residence': _lieuResCtrl.text.trim(),
+      'sexe': _sexe,
+      'pays_residence': _paysResidence,
+      'ville_residence': _villeResCtrl.text.trim(),
       'type_document': _typeDoc,
       'numero_document': _numDocCtrl.text.trim(),
       'numero_chambre': _chambreCtrl.text.trim(),
       'motif_sejour': _motifSejour,
       'nom_jeune_fille': _nomJeuneFilleCtrl.text.trim(),
-      'adresse_complete': _adresseCompleteCtrl.text.trim(),
       'date_delivrance_doc': _dateDelivranceDocCtrl.text,
       'pays_delivrance_doc': _paysDelivrance,
       'venant_de': _venantDeCtrl.text.trim(),
@@ -694,6 +766,8 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   }
 
   Widget _photoGrid() {
+    final String? role = _user?.role;
+    final bool restrictMedia = role == 'AGENT_ACCUEIL' || role == 'GERANT_HOTEL';
     return Row(
       children: [
         Expanded(
@@ -715,16 +789,18 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
             Icons.article_outlined,
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _uploadBox(
-            'CLIENT',
-            _photoClient,
-            _photoUrl,
-            () => _pickImage('photo'),
-            Icons.camera_alt_outlined,
+        if (!restrictMedia) ...[
+          const SizedBox(width: 8),
+          Expanded(
+            child: _uploadBox(
+              'CLIENT',
+              _photoClient,
+              _photoUrl,
+              () => _pickImage('photo'),
+              Icons.camera_alt_outlined,
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -794,6 +870,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   Widget _buildPersonalInfo() {
     return Column(
       children: [
+        // Ligne 1 : NOM | PRÉNOM
         Row(
           children: [
             Expanded(
@@ -822,8 +899,17 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
           ],
         ),
         const SizedBox(height: 12),
+        // Ligne 2 : NOM DE JEUNE FILLE | DATE NAISSANCE
         Row(
           children: [
+            Expanded(
+              child: CustomTextField(
+                label: 'NOM DE JEUNE FILLE',
+                controller: _nomJeuneFilleCtrl,
+                prefixIcon: Icons.person_add_alt,
+              ),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: GestureDetector(
                 onTap: () => _choisirDate(_dateNaissCtrl),
@@ -838,7 +924,12 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Ligne 3 : LIEU NAISSANCE | NATIONALITÉ
+        Row(
+          children: [
             Expanded(
               child: CustomTextField(
                 label: 'LIEU NAISSANCE',
@@ -847,18 +938,33 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
             ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _dropdownField(
+                'NATIONALITÉ',
+                _nationalite,
+                _nationalites,
+                (v) => setState(() => _nationalite = v!),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 12),
-        _dropdownField(
-          'NATIONALITÉ',
-          _nationalite,
-          _nationalites,
-          (v) => setState(() => _nationalite = v!),
-        ),
-        const SizedBox(height: 12),
+        // Ligne 4 : PROFESSION | TÉLÉPHONE
         Row(
           children: [
+            Expanded(
+              child: CustomTextField(
+                label: 'PROFESSION',
+                controller: _professionCtrl,
+                prefixIcon: Icons.work_outline,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-ZÀ-ÿ\s-]')),
+                ],
+                validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
+              ),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: CustomTextField(
                 label: 'TÉLÉPHONE',
@@ -872,37 +978,38 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
               ),
             ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Ligne 5 : SEXE | PAYS DE RÉSIDENCE
+        Row(
+          children: [
+            Expanded(
+              child: _dropdownField('SEXE', _sexe, [
+                'HOMME',
+                'FEMME',
+              ], (v) => setState(() => _sexe = v!)),
+            ),
             const SizedBox(width: 12),
             Expanded(
-              child: CustomTextField(
-                label: 'PROFESSION',
-                controller: _professionCtrl,
-                prefixIcon: Icons.work_outline,
-                validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
+              child: _dropdownField(
+                'PAYS DE RÉSIDENCE',
+                _paysResidence,
+                _paysList,
+                (v) => setState(() => _paysResidence = v!),
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
+        // Ligne 6 : VILLE DE RÉSIDENCE (pleine largeur)
         CustomTextField(
-          label: 'LIEU DE RÉSIDENCE',
-          controller: _lieuResCtrl,
-          prefixIcon: Icons.home_work_outlined,
-          hint: 'Quartier, Ville',
-          validator: (v) => (v == null || v.isEmpty) ? 'Requis' : null,
+          label: 'VILLE DE RÉSIDENCE',
+          controller: _villeResCtrl,
+          prefixIcon: Icons.location_city,
         ),
         const SizedBox(height: 12),
-        CustomTextField(
-          label: 'NOM DE JEUNE FILLE',
-          controller: _nomJeuneFilleCtrl,
-          prefixIcon: Icons.person_add_alt,
-        ),
-        const SizedBox(height: 12),
-        CustomTextField(
-          label: 'ADRESSE COMPLÈTE',
-          controller: _adresseCompleteCtrl,
-          prefixIcon: Icons.map_outlined,
-        ),
+
       ],
     );
   }
@@ -967,6 +1074,34 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
   Widget _buildStayInfo() {
     return Column(
       children: [
+        // Ligne 1 : HÔTEL | DATE ENTRÉE
+        Row(
+          children: [
+            Expanded(
+              child: CustomTextField(
+                label: 'HÔTEL',
+                controller: _hotelCtrl,
+                prefixIcon: Icons.business,
+                readOnly: true,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => _choisirDate(_dateEntreeCtrl),
+                child: AbsorbPointer(
+                  child: CustomTextField(
+                    label: 'DATE D\'ENTRÉE',
+                    controller: _dateEntreeCtrl,
+                    prefixIcon: Icons.calendar_today,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Ligne 2 : CHAMBRE N° | DATE SORTIE PRÉVUE
         Row(
           children: [
             Expanded(
@@ -980,6 +1115,24 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
+              child: GestureDetector(
+                onTap: () => _choisirDate(_dateSortiePrevueCtrl),
+                child: AbsorbPointer(
+                  child: CustomTextField(
+                    label: 'DATE DE SORTIE PRÉVUE',
+                    controller: _dateSortiePrevueCtrl,
+                    prefixIcon: Icons.calendar_today_outlined,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Ligne 2 : MOTIF SÉJOUR | PROVENANCE
+        Row(
+          children: [
+            Expanded(
               child: _dropdownField('MOTIF SÉJOUR', _motifSejour, [
                 'AFFAIRES',
                 'TOURISME',
@@ -987,11 +1140,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 'AUTRE',
               ], (v) => setState(() => _motifSejour = v!)),
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
+            const SizedBox(width: 12),
             Expanded(
               child: CustomTextField(
                 label: 'PROVENANCE',
@@ -999,7 +1148,12 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 prefixIcon: Icons.flight_land,
               ),
             ),
-            const SizedBox(width: 12),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Ligne 3 : DESTINATION | TRANSPORT
+        Row(
+          children: [
             Expanded(
               child: CustomTextField(
                 label: 'DESTINATION',
@@ -1007,11 +1161,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 prefixIcon: Icons.flight_takeoff,
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
+            const SizedBox(width: 12),
             Expanded(
               child: _dropdownField(
                 'TRANSPORT',
@@ -1020,26 +1170,14 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
                 (v) => setState(() => _moyenTransport = v!),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: CustomTextField(
-                label: 'IMMATRICULATION',
-                controller: _immatriculationCtrl,
-                prefixIcon: Icons.numbers,
-              ),
-            ),
           ],
         ),
         const SizedBox(height: 12),
-        GestureDetector(
-          onTap: () => _choisirDate(_dateSortiePrevueCtrl),
-          child: AbsorbPointer(
-            child: CustomTextField(
-              label: 'DATE DE SORTIE PRÉVUE',
-              controller: _dateSortiePrevueCtrl,
-              prefixIcon: Icons.calendar_today_outlined,
-            ),
-          ),
+        // Ligne 4 : IMMATRICULATION (pleine largeur)
+        CustomTextField(
+          label: 'IMMATRICULATION',
+          controller: _immatriculationCtrl,
+          prefixIcon: Icons.numbers,
         ),
       ],
     );
