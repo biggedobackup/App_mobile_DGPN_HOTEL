@@ -209,9 +209,22 @@ class SyncService {
         );
 
         // ── Étape 1 : Envoi des données textuelles ──
-        final List<Map<String, dynamic>> payload = chunk.map((item) => {
-          ...item.fields,
-          'local_uuid': item.localUuid,
+        final List<Map<String, dynamic>> payload = chunk.map((item) {
+          final fieldsCopy = Map<String, dynamic>.from(item.fields);
+          for (final key in ['date_naissance', 'date_delivrance_doc', 'date_sortie_prevue']) {
+            if (fieldsCopy.containsKey(key)) {
+              final norm = SejourService.normalizeDateString(fieldsCopy[key]?.toString());
+              if (norm != null && norm.isNotEmpty) {
+                fieldsCopy[key] = norm;
+              } else {
+                fieldsCopy.remove(key);
+              }
+            }
+          }
+          return {
+            ...fieldsCopy,
+            'local_uuid': item.localUuid,
+          };
         }).toList();
 
         // ignore: avoid_print
@@ -265,10 +278,16 @@ class SyncService {
           }
         }
       }
+    } catch (e) {
+      // ignore: avoid_print
+      print('❌ [Bulk] Exception lors de la synchro: $e');
+      _notify(SyncStatus.error, "Erreur de synchronisation");
     } finally {
       _isSyncing = false;
       if (box.isEmpty) {
         _notify(SyncStatus.success, "Tous les séjours sont synchronisés.");
+      } else {
+        _notify(SyncStatus.idle, "${box.length} séjour(s) en attente de synchro.");
       }
       // ignore: avoid_print
       print('🏁 [Bulk] Fin synchro. Restant: ${box.length} séjour(s).');

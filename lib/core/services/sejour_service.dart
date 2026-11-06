@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -10,6 +11,35 @@ import '../models/sejour_model.dart';
 import 'sync_service.dart';
 
 class SejourService {
+  /// Normalise les dates (ex: JJ.MM.AAAA, JJ/MM/AAAA, JJ-MM-AAAA -> AAAA-MM-JJ)
+  static String? normalizeDateString(String? d) {
+    if (d == null) return null;
+    final trimmed = d.trim();
+    if (trimmed.isEmpty) return null;
+
+    final isoRegex = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+    if (isoRegex.hasMatch(trimmed)) return trimmed;
+
+    final dmyRegex = RegExp(r'^(\d{1,2})[./\-](\d{1,2})[./\-](\d{4})$');
+    final match = dmyRegex.firstMatch(trimmed);
+    if (match != null) {
+      final day = match.group(1)!.padLeft(2, '0');
+      final month = match.group(2)!.padLeft(2, '0');
+      final year = match.group(3)!;
+      return '$year-$month-$day';
+    }
+
+    final ymdRegex = RegExp(r'^(\d{4})[./\-](\d{1,2})[./\-](\d{1,2})$');
+    final matchYmd = ymdRegex.firstMatch(trimmed);
+    if (matchYmd != null) {
+      final year = matchYmd.group(1)!;
+      final month = matchYmd.group(2)!.padLeft(2, '0');
+      final day = matchYmd.group(3)!.padLeft(2, '0');
+      return '$year-$month-$day';
+    }
+
+    return trimmed;
+  }
   static const String _baseUrl = ApiConfig.baseUrl;
 
   Future<String?> _getToken() async {
@@ -285,13 +315,25 @@ class SejourService {
     File? documentVerso,
     bool fromSync = false,
   }) async {
+    final sanitizedFields = Map<String, String>.from(fields);
+    for (final key in ['date_naissance', 'date_delivrance_doc', 'date_sortie_prevue']) {
+      if (sanitizedFields.containsKey(key)) {
+        final norm = normalizeDateString(sanitizedFields[key]);
+        if (norm != null && norm.isNotEmpty) {
+          sanitizedFields[key] = norm;
+        } else {
+          sanitizedFields.remove(key);
+        }
+      }
+    }
+
     try {
       // --- Vérification de la connexion ---
       final bool offline = await _isOfflineSafe();
       if (offline) {
         if (!fromSync) {
           await SyncService().addToQueue(
-            fields: fields,
+            fields: sanitizedFields,
             photoClient: photoClient,
             documentRecto: documentRecto,
             documentVerso: documentVerso,
@@ -308,7 +350,7 @@ class SejourService {
       );
 
       request.headers['Authorization'] = 'Bearer $token';
-      request.fields.addAll(fields);
+      request.fields.addAll(sanitizedFields);
 
       if (photoClient != null) {
         request.files.add(
@@ -338,20 +380,36 @@ class SejourService {
         );
       }
 
-      final response = await request.send();
-      final respBody = await response.stream.bytesToString();
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+      final respBody = await streamedResponse.stream.bytesToString();
       // ignore: avoid_print
-      print("RESPONSE BODY: $respBody");
+      print("RESPONSE BODY (${streamedResponse.statusCode}): $respBody");
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
+      if (streamedResponse.statusCode == 201 || streamedResponse.statusCode == 200) {
         return true;
+      } else if (streamedResponse.statusCode >= 400 && streamedResponse.statusCode < 500) {
+        // Erreur de validation (400, 401, 403, 422) : NE PAS mettre en queue locale
+        String errorMsg = "Erreur de validation lors de l'enregistrement";
+        try {
+          final decoded = jsonDecode(respBody);
+          if (decoded is Map<String, dynamic>) {
+            final firstKey = decoded.keys.first;
+            final firstVal = decoded[firstKey];
+            if (firstVal is List && firstVal.isNotEmpty) {
+              errorMsg = "$firstKey : ${firstVal.first}";
+            } else if (firstVal is String) {
+              errorMsg = "$firstKey : $firstVal";
+            } else if (decoded['detail'] != null) {
+              errorMsg = decoded['detail'].toString();
+            }
+          }
+        } catch (_) {}
+        throw Exception(errorMsg);
       } else {
-        // ignore: avoid_print
-        print("API ERROR ${response.statusCode}: falling back to offline");
-        // Erreur API (pas forcément réseau) -> on tente quand même la sauvegarde locale pour ne pas perdre la donnée
+        // Erreur serveur (5xx) -> mise en queue locale
         if (!fromSync) {
           await SyncService().addToQueue(
-            fields: fields,
+            fields: sanitizedFields,
             photoClient: photoClient,
             documentRecto: documentRecto,
             documentVerso: documentVerso,
@@ -360,11 +418,35 @@ class SejourService {
         }
         return false;
       }
-    } catch (_) {
-      // Exception réseau -> sauvegarde locale
+    } on SocketException {
       if (!fromSync) {
         await SyncService().addToQueue(
-          fields: fields,
+          fields: sanitizedFields,
+          photoClient: photoClient,
+          documentRecto: documentRecto,
+          documentVerso: documentVerso,
+        );
+        return true;
+      }
+      return false;
+    } on TimeoutException {
+      if (!fromSync) {
+        await SyncService().addToQueue(
+          fields: sanitizedFields,
+          photoClient: photoClient,
+          documentRecto: documentRecto,
+          documentVerso: documentVerso,
+        );
+        return true;
+      }
+      return false;
+    } catch (e) {
+      if (e is Exception && !e.toString().contains('SocketException') && !e.toString().contains('TimeoutException')) {
+        rethrow;
+      }
+      if (!fromSync) {
+        await SyncService().addToQueue(
+          fields: sanitizedFields,
           photoClient: photoClient,
           documentRecto: documentRecto,
           documentVerso: documentVerso,
@@ -382,6 +464,18 @@ class SejourService {
     File? documentRecto,
     File? documentVerso,
   }) async {
+    final sanitizedFields = Map<String, String>.from(fields);
+    for (final key in ['date_naissance', 'date_delivrance_doc', 'date_sortie_prevue']) {
+      if (sanitizedFields.containsKey(key)) {
+        final norm = normalizeDateString(sanitizedFields[key]);
+        if (norm != null && norm.isNotEmpty) {
+          sanitizedFields[key] = norm;
+        } else {
+          sanitizedFields.remove(key);
+        }
+      }
+    }
+
     try {
       final token = await _getToken();
       final request = http.MultipartRequest(
@@ -390,7 +484,7 @@ class SejourService {
       );
 
       request.headers['Authorization'] = 'Bearer $token';
-      request.fields.addAll(fields);
+      request.fields.addAll(sanitizedFields);
 
       if (photoClient != null) {
         request.files.add(
@@ -415,8 +509,29 @@ class SejourService {
       }
 
       final response = await request.send();
-      return response.statusCode == 200 || response.statusCode == 204;
-    } catch (_) {
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return true;
+      }
+
+      final respBody = await response.stream.bytesToString();
+      String errorMsg = "Erreur lors de la modification";
+      try {
+        final decoded = jsonDecode(respBody);
+        if (decoded is Map<String, dynamic>) {
+          final firstKey = decoded.keys.first;
+          final firstVal = decoded[firstKey];
+          if (firstVal is List && firstVal.isNotEmpty) {
+            errorMsg = "$firstKey : ${firstVal.first}";
+          } else if (firstVal is String) {
+            errorMsg = "$firstKey : $firstVal";
+          } else if (decoded['detail'] != null) {
+            errorMsg = decoded['detail'].toString();
+          }
+        }
+      } catch (_) {}
+      throw Exception(errorMsg);
+    } catch (e) {
+      if (e is Exception) rethrow;
       return false;
     }
   }

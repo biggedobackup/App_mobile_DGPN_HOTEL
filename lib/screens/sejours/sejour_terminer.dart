@@ -104,7 +104,7 @@ class _SejourTerminerScreenState extends State<SejourTerminerScreen> {
       backgroundColor: AppColors.slate50,
       appBar: AppBar(
         title: Text(
-          'SORTIES PRÉVUES',
+          'SÉJOURS TERMINÉS',
           style: GoogleFonts.inter(
             fontWeight: FontWeight.w900,
             fontSize: 13,

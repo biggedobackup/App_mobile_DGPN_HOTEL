@@ -81,7 +81,8 @@ class _TableauScreenState extends State<TableauScreen> {
           bgColor = AppColors.error;
           icon = Icons.error_outline_rounded;
           break;
-        default:
+        case SyncStatus.idle:
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           return;
       }
 
@@ -104,7 +105,7 @@ class _TableauScreenState extends State<TableauScreen> {
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           duration: event.status == SyncStatus.syncing 
-              ? const Duration(days: 1) // Garder jusqu'à la fin
+              ? const Duration(seconds: 30)
               : const Duration(seconds: 4),
         ),
       );
@@ -154,7 +155,7 @@ class _TableauScreenState extends State<TableauScreen> {
       _StatItem(
         id: 'sorties',
         icon: Icons.logout_outlined,
-        label: 'Sorties prévues',
+        label: 'Séjours terminés',
         value: d['nombre_sorties_clients']?.toString() ?? '0',
         route: '/sejour-terminer',
         color: const Color(0xFFF59E0B),
@@ -554,7 +555,7 @@ class _TableauScreenState extends State<TableauScreen> {
           _drawerItem(Icons.person_add_outlined, 'Enregistrer séjour', '/enregistrement', false),
           _drawerItem(Icons.hotel_outlined, 'Séjours en cours', '/sejours-actifs', false),
           if (!isAgent)
-            _drawerItem(Icons.check_circle_outline, 'Sorties prévues', '/sejour-terminer', false),
+            _drawerItem(Icons.check_circle_outline, 'Séjours terminés', '/sejour-terminer', false),
           if (!isAgent)
             _drawerItem(Icons.history_outlined, 'Historique des séjours', '/historique-sejours', false),
           if (isGerant)

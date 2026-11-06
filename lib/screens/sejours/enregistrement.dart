@@ -376,7 +376,8 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
 
         updateIfEmpty(_nomCtrl, champs['Nom']?.toString());
         updateIfEmpty(_prenomCtrl, champs['Prénoms']?.toString());
-        updateIfEmpty(_dateNaissCtrl, champs['Date de naissance']?.toString());
+        final rawDateNaiss = champs['Date de naissance']?.toString();
+        updateIfEmpty(_dateNaissCtrl, SejourService.normalizeDateString(rawDateNaiss) ?? rawDateNaiss);
         updateIfEmpty(_lieuNaissCtrl, champs['Lieu de naissance']?.toString());
         updateIfEmpty(_professionCtrl, champs['Profession']?.toString());
         updateIfEmpty(_numDocCtrl, champs['Numéro du document']?.toString());
@@ -410,7 +411,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
 
         // Date de délivrance
         final stringDateDelivrance = champs['Date de délivrance']?.toString() ?? champs['date_delivrance_doc']?.toString();
-        updateIfEmpty(_dateDelivranceDocCtrl, stringDateDelivrance);
+        updateIfEmpty(_dateDelivranceDocCtrl, SejourService.normalizeDateString(stringDateDelivrance) ?? stringDateDelivrance);
 
         // Nationalité
         if (champs['Nationalité'] != null && champs['Nationalité'].toString().trim().isNotEmpty) {
@@ -532,10 +533,14 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
 
     setState(() => _loading = true);
 
+        final normNaiss = SejourService.normalizeDateString(_dateNaissCtrl.text);
+    final normDeliv = SejourService.normalizeDateString(_dateDelivranceDocCtrl.text);
+    final normSortie = SejourService.normalizeDateString(_dateSortiePrevueCtrl.text);
+
     final fields = {
       'nom_client': _nomCtrl.text.trim(),
       'prenom_client': _prenomCtrl.text.trim(),
-      'date_naissance': _dateNaissCtrl.text,
+      'date_naissance': (normNaiss != null && normNaiss.isNotEmpty) ? normNaiss : _dateNaissCtrl.text.trim(),
       'lieu_naissance': _lieuNaissCtrl.text.trim(),
       'nationalite': _nationalite,
       'profession': _professionCtrl.text.trim(),
@@ -548,7 +553,7 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
       'numero_chambre': _chambreCtrl.text.trim(),
       'motif_sejour': _motifSejour,
       'nom_jeune_fille': _nomJeuneFilleCtrl.text.trim(),
-      'date_delivrance_doc': _dateDelivranceDocCtrl.text,
+      'date_delivrance_doc': (normDeliv != null && normDeliv.isNotEmpty) ? normDeliv : _dateDelivranceDocCtrl.text.trim(),
       'pays_delivrance_doc': _paysDelivrance,
       'venant_de': _venantDeCtrl.text.trim(),
       'allant_a': _allantACtrl.text.trim(),
@@ -558,62 +563,67 @@ class _EnregistrementScreenState extends State<EnregistrementScreen> {
       'date_entree': _dateEntreeCtrl.text.isNotEmpty
           ? _dateEntreeCtrl.text.replaceAll(' ', 'T')
           : DateTime.now().toIso8601String(),
-      'date_sortie_prevue': _dateSortiePrevueCtrl.text,
+      'date_sortie_prevue': (normSortie != null && normSortie.isNotEmpty) ? normSortie : _dateSortiePrevueCtrl.text.trim(),
     };
 
     // DRF n'accepte pas toujours les chaînes vides ("") pour des dates ou des champs avec choices
     fields.removeWhere((key, value) => value.isEmpty);
 
-    bool success;
-    if (widget.sejourId != null) {
-      success = await _sejourService.updateSejour(
-        id: int.parse(widget.sejourId!),
-        fields: fields,
-        photoClient: _photoClient,
-        documentRecto: _docRecto,
-        documentVerso: _docVerso,
-      );
-    } else {
-      success = await _sejourService.enregistrerSejour(
-        fields: fields,
-        photoClient: _photoClient,
-        documentRecto: _docRecto,
-        documentVerso: _docVerso,
-      );
-    }
-
-    if (mounted) {
-      setState(() => _loading = false);
-      if (success) {
-        final List<ConnectivityResult> connectivityResult = await Connectivity()
-            .checkConnectivity();
-        if (!mounted) return;
-        final bool isOffline = connectivityResult.contains(
-          ConnectivityResult.none,
+    try {
+      bool success;
+      if (widget.sejourId != null) {
+        success = await _sejourService.updateSejour(
+          id: int.parse(widget.sejourId!),
+          fields: fields,
+          photoClient: _photoClient,
+          documentRecto: _docRecto,
+          documentVerso: _docVerso,
         );
-
-        UIUtils.showSuccessBanner(
-          context,
-          widget.sejourId != null ? 'Séjour mis à jour' : 'Client enregistré',
-          isOffline: isOffline,
+      } else {
+        success = await _sejourService.enregistrerSejour(
+          fields: fields,
+          photoClient: _photoClient,
+          documentRecto: _docRecto,
+          documentVerso: _docVerso,
         );
+      }
 
-        if (widget.sejourId != null) {
+      if (mounted) {
+        setState(() => _loading = false);
+        if (success) {
+          final List<ConnectivityResult> connectivityResult = await Connectivity()
+              .checkConnectivity();
+          if (!mounted) return;
+          final bool isOffline = connectivityResult.contains(
+            ConnectivityResult.none,
+          );
+
+          UIUtils.showSuccessBanner(
+            context,
+            widget.sejourId != null ? 'Séjour mis à jour' : 'Client enregistré',
+            isOffline: isOffline,
+          );
+
           Navigator.pop(context, true);
         } else {
-          Navigator.pop(context, true);
+          _showError(
+            widget.sejourId != null
+                ? 'Erreur lors de la modification'
+                : 'Erreur lors de l\'enregistrement',
+          );
         }
-      } else {
-        _showError(
-          widget.sejourId != null
-              ? 'Erreur lors de la modification'
-              : 'Erreur lors de l\'enregistrement',
-        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        final msg = e.toString().replaceFirst('Exception: ', '');
+        _showError(msg);
       }
     }
   }
 
   void _showError(String msg) {
+
     UIUtils.showErrorBanner(context, msg);
   }
 

@@ -31,7 +31,7 @@ class _MainScaffoldState extends State<MainScaffold> {
       {'label': 'Tableau de Bord', 'icon': Icons.dashboard_rounded, 'route': '/tableau'},
       {'label': 'Enregistrer séjour', 'icon': Icons.person_add_alt_1_rounded, 'route': '/enregistrement'},
       {'label': 'Séjours en cours', 'icon': Icons.bed_rounded, 'route': '/sejours-actifs'},
-      {'label': 'Sorties prévues', 'icon': Icons.logout_rounded, 'route': '/sejour-terminer'},
+      {'label': 'Séjours terminés', 'icon': Icons.logout_rounded, 'route': '/sejour-terminer'},
       if (isGerant) {'label': 'Gestion des Utilisateurs', 'icon': Icons.people_rounded, 'route': '/utilisateurs'},
       {'label': 'Profil', 'icon': Icons.account_circle_rounded, 'route': '/profil'},
     ];
